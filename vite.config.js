@@ -5,8 +5,13 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: '0.0.0.0', // Add this line - binds to all network interfaces
-    port: parseInt(process.env.PORT || '5173'), // Use Render's PORT env variable
+    host: '0.0.0.0',
+    port: parseInt(process.env.PORT || '5173'),
+    allowedHosts: [
+      'translation-app-frontend-lhk5.onrender.com',
+      '.onrender.com', // Allow all Render subdomains
+      'localhost'
+    ],
     proxy: {
       '/api': {
         target: process.env.VITE_API_URL || 'http://localhost:8000',
@@ -16,7 +21,12 @@ export default defineConfig({
     },
   },
   preview: {
-    host: '0.0.0.0', // Also for preview mode
+    host: '0.0.0.0',
     port: parseInt(process.env.PORT || '4173'),
+    allowedHosts: [
+      'translation-app-frontend-lhk5.onrender.com',
+      '.onrender.com',
+      'localhost'
+    ],
   }
 })
