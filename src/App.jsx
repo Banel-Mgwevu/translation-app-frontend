@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { FileText, Upload, Download, Check, Clock, AlertCircle, Zap, Crown, Briefcase, X, LogIn, LogOut, UserPlus, Mail, Lock, User, File, BarChart3, TrendingUp } from 'lucide-react'
+import { FileText, Upload, Download, Check, Clock, AlertCircle, Zap, Crown, Briefcase, X, LogIn, LogOut, UserPlus, Mail, Lock, User, BarChart3, TrendingUp } from 'lucide-react'
 
-const API_URL = 'https://translate-any-pdf.onrender.com'
+const API_URL = 'https://translation-app-frontend-lhk5.onrender.com'
 
 const LANGUAGES = [
   { code: 'auto', name: 'Auto-detect', flag: '🌐' },
@@ -12,12 +12,7 @@ const LANGUAGES = [
   { code: 'st', name: 'Sesotho', flag: '🇿🇦' },
   { code: 'tn', name: 'Setswana', flag: '🇿🇦' },
   { code: 'ss', name: 'siSwati', flag: '🇿🇦' },
-  { code: 'ts', name: 'Xitsonga', flag: '🇿🇦' },
-  { code: 've', name: 'Tshivenda', flag: '🇿🇦' },
-  { code: 'nr', name: 'isiNdebele', flag: '🇿🇦' },
   { code: 'nso', name: 'Sepedi', flag: '🇿🇦' },
-  { code: 'fr', name: 'French', flag: '🇫🇷' },
-  { code: 'pt', name: 'Portuguese', flag: '🇵🇹' },
 ]
 
 const SUBSCRIPTION_TIERS = {
@@ -27,7 +22,7 @@ const SUBSCRIPTION_TIERS = {
     price: 0, 
     color: '#0056A8',
     icon: Zap,
-    features: ['5 completed translations/month', 'All languages', 'DOCX & PDF support', 'Basic support', 'Standard processing']
+    features: ['5 completed translations/month', 'All languages', 'DOCX support', 'Basic support', 'Standard processing']
   },
   professional: { 
     name: 'Professional', 
@@ -35,7 +30,7 @@ const SUBSCRIPTION_TIERS = {
     price: 299, 
     color: '#FFC800',
     icon: Crown,
-    features: ['20 completed translations/month', 'All languages', 'DOCX & PDF support', 'Priority support', 'Fast processing', 'Email notifications']
+    features: ['20 completed translations/month', 'All languages', 'DOCX support', 'Priority support', 'Fast processing', 'Email notifications']
   },
   enterprise: { 
     name: 'Enterprise', 
@@ -43,23 +38,17 @@ const SUBSCRIPTION_TIERS = {
     price: 999, 
     color: '#E01E1E',
     icon: Briefcase,
-    features: ['Unlimited translations', 'All languages', 'DOCX & PDF support', '24/7 support', 'Instant processing', 'Dedicated manager', 'API access']
+    features: ['Unlimited translations', 'All languages', 'DOCX support', '24/7 support', 'Instant processing', 'Dedicated manager', 'API access']
   }
 }
 
-// File type configuration
+// File type configuration (DOCX only)
 const FILE_TYPES = {
   '.docx': {
     name: 'Microsoft Word',
     icon: FileText,
     color: '#2b579a',
     description: 'Full formatting preservation'
-  },
-  '.pdf': {
-    name: 'PDF Document',
-    icon: File,
-    color: '#dc2626',
-    description: 'Text extraction & translation'
   }
 }
 
@@ -94,6 +83,10 @@ function App() {
   const [metricsLoading, setMetricsLoading] = useState(false)
   const [currentMetricsDoc, setCurrentMetricsDoc] = useState(null)
 
+  // Payment success state
+  const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false)
+  const [paymentSuccessData, setPaymentSuccessData] = useState(null)
+
   // Helper functions
   const getFileExtension = (filename) => {
     return filename.substring(filename.lastIndexOf('.')).toLowerCase()
@@ -101,13 +94,37 @@ function App() {
 
   const isValidFile = (filename) => {
     const ext = getFileExtension(filename)
-    return ext === '.docx' || ext === '.pdf'
+    return ext === '.docx'
   }
 
   const getFileTypeInfo = (filename) => {
     const ext = getFileExtension(filename)
-    return FILE_TYPES[ext] || { name: 'Unknown', icon: File, color: '#666', description: '' }
+    return FILE_TYPES[ext] || { name: 'Unknown', icon: FileText, color: '#666', description: '' }
   }
+
+  // Check for payment success on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const paymentStatus = urlParams.get('payment_status')
+    const tier = urlParams.get('tier')
+    
+    if (paymentStatus === 'success' && tier) {
+      // Show success modal
+      setPaymentSuccessData({ tier })
+      setShowPaymentSuccessModal(true)
+      
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname)
+      
+      // Refresh user info after a short delay
+      const token = localStorage.getItem('authToken')
+      if (token) {
+        setTimeout(() => {
+          fetchUserInfo(token)
+        }, 1000)
+      }
+    }
+  }, [])
 
   // Check authentication on mount
   useEffect(() => {
@@ -259,7 +276,7 @@ function App() {
         const fileType = getFileTypeInfo(file.name)
         showMessage(`Selected: ${file.name} (${fileType.name})`, 'success')
       } else {
-        showMessage('Please select a .docx or .pdf file', 'error')
+        showMessage('Please select a .docx file', 'error')
       }
     }
   }
@@ -292,7 +309,7 @@ function App() {
       const fileType = getFileTypeInfo(file.name)
       showMessage(`Selected: ${file.name} (${fileType.name})`, 'success')
     } else {
-      showMessage('Please select a .docx or .pdf file', 'error')
+      showMessage('Please select a .docx file', 'error')
     }
   }
 
@@ -605,7 +622,7 @@ function App() {
               Academic Translator
             </h1>
             <p style={{ fontSize: '1rem', color: '#666' }}>
-              DOCX & PDF Translation
+              DOCX Translation Service
             </p>
           </div>
 
@@ -771,6 +788,153 @@ function App() {
 
   return (
     <div style={{ fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif", minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f8f9fa' }}>
+      {/* Payment Success Modal */}
+      {showPaymentSuccessModal && paymentSuccessData && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1003,
+          backdropFilter: 'blur(12px)'
+        }}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '32px',
+            padding: '4rem 3rem',
+            maxWidth: '600px',
+            width: '90%',
+            boxShadow: '0 32px 100px rgba(0, 0, 0, 0.5)',
+            position: 'relative',
+            animation: 'celebrationSlideIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
+            textAlign: 'center'
+          }}>
+            {/* Confetti Effect */}
+            <div style={{
+              position: 'absolute',
+              top: '-50px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              fontSize: '80px',
+              animation: 'bounce 1s ease-in-out infinite'
+            }}>
+              🎉
+            </div>
+
+            <div style={{
+              width: '120px',
+              height: '120px',
+              margin: '0 auto 2rem',
+              background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 16px 50px rgba(34, 197, 94, 0.5)',
+              animation: 'scaleIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s backwards'
+            }}>
+              <Check size={70} color="#fff" strokeWidth={3} />
+            </div>
+
+            <h2 style={{
+              fontSize: '2.5rem',
+              fontWeight: '900',
+              color: '#1a1a2e',
+              marginBottom: '1rem',
+              lineHeight: '1.2',
+              animation: 'fadeInUp 0.6s ease-out 0.4s backwards'
+            }}>
+              Payment Successful! 🎊
+            </h2>
+
+            <p style={{
+              fontSize: '1.2rem',
+              color: '#666',
+              marginBottom: '2rem',
+              lineHeight: '1.6',
+              animation: 'fadeInUp 0.6s ease-out 0.5s backwards'
+            }}>
+              Welcome to <strong>{SUBSCRIPTION_TIERS[paymentSuccessData.tier]?.name}</strong> plan!
+            </p>
+
+            <div style={{
+              background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
+              borderRadius: '20px',
+              padding: '2rem',
+              marginBottom: '2.5rem',
+              border: '2px solid #bbf7d0',
+              animation: 'fadeInUp 0.6s ease-out 0.6s backwards'
+            }}>
+              <h3 style={{
+                fontSize: '1.2rem',
+                fontWeight: '700',
+                color: '#15803d',
+                marginBottom: '1.5rem'
+              }}>
+                🚀 Your New Benefits
+              </h3>
+              <div style={{ textAlign: 'left', display: 'inline-block' }}>
+                {SUBSCRIPTION_TIERS[paymentSuccessData.tier]?.features.map((feature, idx) => (
+                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Check size={16} color="#fff" strokeWidth={3} />
+                    </div>
+                    <span style={{ fontSize: '1rem', color: '#15803d', fontWeight: '500' }}>{feature}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowPaymentSuccessModal(false)
+                setPaymentSuccessData(null)
+                setShowSubscription(false)
+              }}
+              style={{
+                width: '100%',
+                padding: '1.25rem',
+                background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '16px',
+                fontSize: '1.2rem',
+                fontWeight: '700',
+                cursor: 'pointer',
+                transition: 'all 0.3s',
+                boxShadow: '0 12px 32px rgba(34, 197, 94, 0.4)',
+                animation: 'fadeInUp 0.6s ease-out 0.7s backwards'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.transform = 'translateY(-2px)'
+                e.target.style.boxShadow = '0 16px 40px rgba(34, 197, 94, 0.5)'
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.transform = 'translateY(0)'
+                e.target.style.boxShadow = '0 12px 32px rgba(34, 197, 94, 0.4)'
+              }}
+            >
+              Start Translating! →
+            </button>
+
+            <p style={{
+              fontSize: '0.9rem',
+              color: '#999',
+              marginTop: '1.5rem',
+              fontStyle: 'italic',
+              animation: 'fadeInUp 0.6s ease-out 0.8s backwards'
+            }}>
+              Your subscription has been activated immediately
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Metrics Modal */}
       {showMetricsModal && (
         <div style={{
@@ -1187,7 +1351,7 @@ function App() {
                   <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Check size={14} color="#fff" />
                   </div>
-                  <span style={{ fontSize: '0.95rem', color: '#0c4a6e', fontWeight: '500' }}>DOCX & PDF support</span>
+                  <span style={{ fontSize: '0.95rem', color: '#0c4a6e', fontWeight: '500' }}>DOCX support</span>
                 </div>
               </div>
             </div>
@@ -1406,7 +1570,7 @@ function App() {
                 Academic Translator
               </h1>
               <p style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.7)', margin: 0 }}>
-                DOCX & PDF Translation Service
+                DOCX Translation Service
               </p>
             </div>
           </div>
@@ -1667,10 +1831,7 @@ function App() {
                 {!canTranslate() ? (
                   <Crown size={48} color="#ffc107" style={{ margin: '0 auto' }} />
                 ) : selectedFile ? (
-                  (() => {
-                    const FileIcon = getFileTypeInfo(selectedFile.name).icon
-                    return <FileIcon size={48} color={getFileTypeInfo(selectedFile.name).color} style={{ margin: '0 auto' }} />
-                  })()
+                  <FileText size={48} color={getFileTypeInfo(selectedFile.name).color} style={{ margin: '0 auto' }} />
                 ) : (
                   <FileText size={48} color={loading ? '#ccc' : dragActive ? '#667eea' : '#999'} style={{ margin: '0 auto' }} />
                 )}
@@ -1682,7 +1843,7 @@ function App() {
                     ? 'Processing document...' 
                     : selectedFile 
                       ? selectedFile.name 
-                      : 'Drop your DOCX or PDF file here'}
+                      : 'Drop your DOCX file here'}
               </p>
               <p style={{ fontSize: '0.875rem', color: '#666' }}>
                 {!canTranslate() 
@@ -1691,12 +1852,12 @@ function App() {
                     ? 'Please wait for current translation to complete' 
                     : selectedFile
                       ? `${getFileTypeInfo(selectedFile.name).name} • ${getFileTypeInfo(selectedFile.name).description}`
-                      : 'Supports .docx and .pdf files • or click to browse'}
+                      : 'Supports .docx files • or click to browse'}
               </p>
               <input
                 id="fileInput"
                 type="file"
-                accept=".docx,.pdf"
+                accept=".docx"
                 onChange={handleFileSelect}
                 style={{ display: 'none' }}
                 disabled={loading || !canTranslate()}
@@ -1710,19 +1871,13 @@ function App() {
               borderRadius: '12px',
               padding: '1rem',
               marginBottom: '1.5rem',
-              fontSize: '0.875rem'
+              fontSize: '0.875rem',
+              textAlign: 'center'
             }}>
-              <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <FileText size={16} color="#2b579a" />
-                  <span style={{ color: '#1e40af', fontWeight: '600' }}>DOCX:</span>
-                  <span style={{ color: '#475569' }}>Perfect formatting</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <File size={16} color="#dc2626" />
-                  <span style={{ color: '#991b1b', fontWeight: '600' }}>PDF:</span>
-                  <span style={{ color: '#475569' }}>Text translation</span>
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+                <FileText size={16} color="#2b579a" />
+                <span style={{ color: '#1e40af', fontWeight: '600' }}>DOCX Only:</span>
+                <span style={{ color: '#475569' }}>Perfect formatting preservation</span>
               </div>
             </div>
 
@@ -1891,7 +2046,7 @@ function App() {
               </div>
             </div>
 
-            {/* Multi-Format Info Box */}
+            {/* DOCX Info Box */}
             <div style={{ background: 'linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%)', borderRadius: '12px', padding: '1.5rem', border: '1px solid #bfdbfe' }}>
               <div style={{ display: 'flex', alignItems: 'start', gap: '1rem' }}>
                 <div style={{ width: '40px', height: '40px', background: '#3b82f6', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1899,10 +2054,10 @@ function App() {
                 </div>
                 <div>
                   <h3 style={{ fontSize: '1rem', fontWeight: '700', color: '#1e40af', marginBottom: '0.5rem' }}>
-                    Multi-Format Support
+                    Professional DOCX Translation
                   </h3>
                   <p style={{ fontSize: '0.875rem', color: '#1e3a8a', lineHeight: '1.6', margin: 0 }}>
-                    Translate both <strong>DOCX</strong> (with full formatting) and <strong>PDF</strong> files. Perfect for dissertations, theses, research papers, and academic documents.
+                    Translate <strong>Microsoft Word</strong> documents with full formatting preservation. Perfect for dissertations, theses, research papers, and academic documents.
                   </p>
                 </div>
               </div>
@@ -1924,7 +2079,7 @@ function App() {
                 No translated documents yet
               </h3>
               <p style={{ fontSize: '0.95rem', color: '#bbb' }}>
-                Upload and translate your first DOCX or PDF file to see it here
+                Upload and translate your first DOCX file to see it here
               </p>
             </div>
           ) : (
@@ -2072,7 +2227,7 @@ function App() {
             Academic Document Translator
           </div>
           <div style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.7)', marginBottom: '0.5rem' }}>
-            Supporting DOCX & PDF • 11 South African Languages • Research & Academic Use
+            Supporting DOCX • 11 South African Languages • Research & Academic Use
           </div>
           <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>
             Preserving academic integrity through professional translation • 2025
@@ -2102,6 +2257,44 @@ function App() {
           to {
             opacity: 1;
             transform: scale(1) translateY(0);
+          }
+        }
+        @keyframes celebrationSlideIn {
+          from {
+            opacity: 0;
+            transform: scale(0.8) translateY(-30px);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+          }
+        }
+        @keyframes scaleIn {
+          from {
+            opacity: 0;
+            transform: scale(0);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        @keyframes bounce {
+          0%, 100% {
+            transform: translateX(-50%) translateY(0);
+          }
+          50% {
+            transform: translateX(-50%) translateY(-20px);
           }
         }
         @keyframes pulse {
