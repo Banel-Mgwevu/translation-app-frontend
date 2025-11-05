@@ -10,7 +10,8 @@ export default defineConfig({
     allowedHosts: [
       'translation-app-frontend-lhk5.onrender.com',
       '.onrender.com', // Allow all Render subdomains
-      'localhost'
+      'localhost',
+      'https://translate-any-pdf.onrender.com'
     ],
     proxy: {
       '/api': {
