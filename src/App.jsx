@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { FileText, Upload, Download, Check, Clock, AlertCircle, Zap, Crown, Briefcase, X, LogIn, LogOut, UserPlus, Mail, Lock, User, BarChart3, TrendingUp } from 'lucide-react'
 
-const API_URL = 'https://translation-app-frontend-lhk5.onrender.com'
+const API_URL = 'https://translate-any-pdf.onrender.com'
 
 const LANGUAGES = [
   { code: 'auto', name: 'Auto-detect', flag: '🌐' },
