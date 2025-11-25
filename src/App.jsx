@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileText, Upload, Download, Check, Clock, AlertCircle, Zap, Crown, Briefcase, X, LogIn, LogOut, UserPlus, Mail, Lock, User, BarChart3, TrendingUp } from 'lucide-react'
+import { FileText, Upload, Download, Check, Clock, AlertCircle, Zap, Crown, Briefcase, X, LogIn, LogOut, UserPlus, Mail, Lock, User, BarChart3, TrendingUp, RefreshCw } from 'lucide-react'
 
 const API_URL = 'https://translate-any-pdf.onrender.com'
 
@@ -13,6 +13,10 @@ const LANGUAGES = [
   { code: 'tn', name: 'Setswana', flag: '🇿🇦' },
   { code: 'ss', name: 'siSwati', flag: '🇿🇦' },
   { code: 'nso', name: 'Sepedi', flag: '🇿🇦' },
+  { code: 'es', name: 'Spanish', flag: '🇪🇸' },
+  { code: 'fr', name: 'French', flag: '🇫🇷' },
+  { code: 'de', name: 'German', flag: '🇩🇪' },
+  { code: 'pt', name: 'Portuguese', flag: '🇵🇹' },
 ]
 
 const SUBSCRIPTION_TIERS = {
@@ -42,7 +46,6 @@ const SUBSCRIPTION_TIERS = {
   }
 }
 
-// File type configuration (DOCX only)
 const FILE_TYPES = {
   '.docx': {
     name: 'Microsoft Word',
@@ -58,7 +61,7 @@ function App() {
   const [authToken, setAuthToken] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   const [showAuthModal, setShowAuthModal] = useState(false)
-  const [authMode, setAuthMode] = useState('signin') // 'signin' or 'signup'
+  const [authMode, setAuthMode] = useState('signin')
   const [authForm, setAuthForm] = useState({ email: '', password: '', name: '' })
   
   // App state
@@ -77,11 +80,9 @@ function App() {
   const [processingDocId, setProcessingDocId] = useState(null)
   const [showLimitModal, setShowLimitModal] = useState(false)
   
-  // Metrics state
-  const [showMetricsModal, setShowMetricsModal] = useState(false)
-  const [metricsData, setMetricsData] = useState(null)
-  const [metricsLoading, setMetricsLoading] = useState(false)
-  const [currentMetricsDoc, setCurrentMetricsDoc] = useState(null)
+  // Debug mode
+  const [debugInfo, setDebugInfo] = useState(null)
+  const [showDebug, setShowDebug] = useState(false)
 
   // Payment success state
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false)
@@ -102,6 +103,72 @@ function App() {
     return FILE_TYPES[ext] || { name: 'Unknown', icon: FileText, color: '#666', description: '' }
   }
 
+  // Enhanced API call function with better error handling
+  const apiCall = async (endpoint, options = {}) => {
+    const url = `${API_URL}${endpoint}`
+    
+    console.log(`🌐 API Call: ${options.method || 'GET'} ${endpoint}`)
+    
+    // Add auth token if available
+    const headers = options.headers || {}
+    if (authToken && !headers['Authorization']) {
+      headers['Authorization'] = `Bearer ${authToken}`
+      console.log(`   Auth: Bearer ${authToken.substring(0, 20)}...`)
+    } else if (!authToken) {
+      console.log(`   Auth: ❌ No token`)
+    }
+    
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers
+      })
+      
+      console.log(`   Response: ${response.status} ${response.statusText}`)
+      
+      // Handle 401 - token expired or invalid
+      if (response.status === 401) {
+        console.error('❌ Authentication failed - logging out')
+        handleSignOut()
+        showMessage('Session expired. Please sign in again.', 'error')
+        throw new Error('Authentication required')
+      }
+      
+      // Try to parse JSON
+      const contentType = response.headers.get('content-type')
+      let data
+      
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json()
+      } else {
+        data = await response.text()
+      }
+      
+      if (!response.ok) {
+        const errorMessage = typeof data === 'object' ? data.detail || data.message : data
+        console.error(`❌ API Error: ${errorMessage}`)
+        throw new Error(errorMessage || `Request failed with status ${response.status}`)
+      }
+      
+      console.log(`✓ Success`)
+      return data
+      
+    } catch (error) {
+      console.error(`❌ API Call Failed: ${error.message}`)
+      
+      // Update debug info
+      setDebugInfo({
+        endpoint,
+        method: options.method || 'GET',
+        error: error.message,
+        token: authToken ? `${authToken.substring(0, 20)}...` : 'No token',
+        timestamp: new Date().toISOString()
+      })
+      
+      throw error
+    }
+  }
+
   // Check for payment success on mount
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
@@ -109,7 +176,6 @@ function App() {
     const tier = urlParams.get('tier')
     
     if (paymentStatus === 'success' && tier) {
-      // Show success modal
       setPaymentSuccessData({ tier })
       setShowPaymentSuccessModal(true)
       
@@ -131,36 +197,49 @@ function App() {
     const token = localStorage.getItem('authToken')
     const user = localStorage.getItem('user')
     
+    console.log('🔐 Checking stored auth...')
+    console.log(`   Token: ${token ? token.substring(0, 20) + '...' : 'None'}`)
+    console.log(`   User: ${user ? 'Found' : 'None'}`)
+    
     if (token && user) {
       setAuthToken(token)
       setCurrentUser(JSON.parse(user))
       setIsAuthenticated(true)
       fetchUserInfo(token)
+    } else {
+      console.log('   No stored auth - showing login')
     }
   }, [])
 
-  // API calls with authentication
+  // Fetch user info with token
   const fetchUserInfo = async (token) => {
     try {
+      console.log('👤 Fetching user info...')
+      
       const response = await fetch(`${API_URL}/auth/me`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       })
       
+      console.log(`   Response: ${response.status}`)
+      
       if (response.ok) {
         const userData = await response.json()
+        console.log(`   ✓ User loaded: ${userData.email}`)
         setCurrentUser(userData)
         localStorage.setItem('user', JSON.stringify(userData))
       } else {
-        // Token invalid, log out
+        console.log(`   ❌ Failed to load user - logging out`)
         handleSignOut()
       }
     } catch (error) {
-      console.error('Failed to fetch user info:', error)
+      console.error(`❌ Error fetching user: ${error.message}`)
+      handleSignOut()
     }
   }
 
+  // Handle authentication
   const handleAuth = async (e) => {
     e.preventDefault()
     setLoading(true)
@@ -171,40 +250,39 @@ function App() {
         ? { email: authForm.email, password: authForm.password }
         : authForm
 
-      const response = await fetch(`${API_URL}${endpoint}`, {
+      console.log(`🔑 ${authMode === 'signin' ? 'Signing in' : 'Signing up'}: ${authForm.email}`)
+
+      const data = await apiCall(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       })
 
-      const data = await response.json()
-
-      if (response.ok) {
-        setAuthToken(data.token)
-        setCurrentUser(data.user)
-        setIsAuthenticated(true)
-        localStorage.setItem('authToken', data.token)
-        localStorage.setItem('user', JSON.stringify(data.user))
-        setShowAuthModal(false)
-        setAuthForm({ email: '', password: '', name: '' })
-        showMessage(`Welcome ${data.user.name}!`, 'success')
-        loadDocuments(data.token)
-      } else {
-        showMessage(data.detail || 'Authentication failed', 'error')
-      }
+      console.log('✓ Auth successful')
+      
+      setAuthToken(data.token)
+      setCurrentUser(data.user)
+      setIsAuthenticated(true)
+      localStorage.setItem('authToken', data.token)
+      localStorage.setItem('user', JSON.stringify(data.user))
+      setShowAuthModal(false)
+      setAuthForm({ email: '', password: '', name: '' })
+      showMessage(`Welcome ${data.user.name}!`, 'success')
+      loadDocuments(data.token)
+      
     } catch (error) {
-      showMessage(`Error: ${error.message}`, 'error')
+      showMessage(error.message || 'Authentication failed', 'error')
     } finally {
       setLoading(false)
     }
   }
 
+  // Handle sign out
   const handleSignOut = async () => {
     try {
       if (authToken) {
-        await fetch(`${API_URL}/auth/signout`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${authToken}` }
+        await apiCall('/auth/signout', {
+          method: 'POST'
         })
       }
     } catch (error) {
@@ -221,6 +299,7 @@ function App() {
   }
 
   const showMessage = (text, type = 'info') => {
+    console.log(`📢 Message: [${type}] ${text}`)
     setMessage({ text, type })
     setTimeout(() => setMessage(null), 5000)
   }
@@ -346,6 +425,8 @@ function App() {
     formData.append('file', selectedFile)
 
     try {
+      console.log('📤 Uploading file:', selectedFile.name)
+      
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => {
           if (prev >= 90) {
@@ -367,26 +448,26 @@ function App() {
       clearInterval(progressInterval)
       setUploadProgress(100)
 
-      const data = await response.json()
-
-      if (response.ok) {
-        const fileType = getFileTypeInfo(selectedFile.name)
-        showMessage(`${fileType.name} uploaded successfully!`, 'success')
-        setSelectedFile(null)
-        
-        setTimeout(() => {
-          setUploadProgress(0)
-          setCurrentOperation('translating')
-          handleTranslate(data.doc_id)
-        }, 500)
-      } else {
-        showMessage(`Upload failed: ${data.detail}`, 'error')
-        setUploadProgress(0)
-        setShowModal(false)
-        setLoading(false)
-        setCurrentOperation('')
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.detail || 'Upload failed')
       }
+
+      const data = await response.json()
+      console.log('✓ Upload successful, doc_id:', data.doc_id)
+
+      const fileType = getFileTypeInfo(selectedFile.name)
+      showMessage(`${fileType.name} uploaded successfully!`, 'success')
+      setSelectedFile(null)
+      
+      setTimeout(() => {
+        setUploadProgress(0)
+        setCurrentOperation('translating')
+        handleTranslate(data.doc_id)
+      }, 500)
+      
     } catch (error) {
+      console.error('❌ Upload error:', error)
       showMessage(`Upload error: ${error.message}`, 'error')
       setUploadProgress(0)
       setShowModal(false)
@@ -403,6 +484,8 @@ function App() {
     setProcessingDocId(docId)
 
     try {
+      console.log('🌐 Starting translation:', docId)
+      
       const progressInterval = setInterval(() => {
         setTranslationProgress(prev => {
           if (prev >= 90) {
@@ -413,46 +496,39 @@ function App() {
         })
       }, 300)
 
-      const response = await fetch(`${API_URL}/translate`, {
+      const data = await apiCall('/translate', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           doc_id: docId,
           source_lang: sourceLang,
           target_lang: targetLang,
-        }),
+        })
       })
 
       clearInterval(progressInterval)
       setTranslationProgress(100)
 
-      const data = await response.json()
-
-      if (response.ok) {
-        showMessage('Translation completed successfully!', 'success')
-        // Refresh user info to update usage count
-        fetchUserInfo(authToken)
-        loadDocuments(authToken)
-        setTimeout(() => {
-          setTranslationProgress(0)
-          setShowModal(false)
-          setLoading(false)
-          setCurrentOperation('')
-          setProcessingDocId(null)
-        }, 1000)
-      } else {
-        showMessage(`Translation failed: ${data.detail}`, 'error')
+      console.log('✓ Translation successful')
+      showMessage('Translation completed successfully!', 'success')
+      
+      // Refresh user info to update usage count
+      fetchUserInfo(authToken)
+      loadDocuments(authToken)
+      
+      setTimeout(() => {
         setTranslationProgress(0)
         setShowModal(false)
         setLoading(false)
         setCurrentOperation('')
         setProcessingDocId(null)
-      }
+      }, 1000)
+      
     } catch (error) {
-      showMessage(`Translation error: ${error.message}`, 'error')
+      console.error('❌ Translation error:', error)
+      showMessage(`Translation failed: ${error.message}`, 'error')
       setTranslationProgress(0)
       setShowModal(false)
       setLoading(false)
@@ -463,6 +539,8 @@ function App() {
 
   const handleDownload = async (docId, filename) => {
     try {
+      console.log('📥 Downloading:', docId)
+      
       const response = await fetch(`${API_URL}/download/${docId}`, {
         headers: {
           'Authorization': `Bearer ${authToken}`
@@ -485,35 +563,6 @@ function App() {
       }
     } catch (error) {
       showMessage(`Download error: ${error.message}`, 'error')
-    }
-  }
-
-  const handleViewMetrics = async (docId, filename) => {
-    setCurrentMetricsDoc({ id: docId, filename })
-    setShowMetricsModal(true)
-    setMetricsLoading(true)
-    setMetricsData(null)
-
-    try {
-      const response = await fetch(`${API_URL}/metrics/${docId}`, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setMetricsData(data)
-      } else {
-        const error = await response.json()
-        showMessage(error.detail || 'Failed to load metrics', 'error')
-        setShowMetricsModal(false)
-      }
-    } catch (error) {
-      showMessage(`Metrics error: ${error.message}`, 'error')
-      setShowMetricsModal(false)
-    } finally {
-      setMetricsLoading(false)
     }
   }
 
@@ -569,16 +618,10 @@ function App() {
     if (!token) return
     
     try {
-      const response = await fetch(`${API_URL}/documents`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-      
-      if (response.ok) {
-        const data = await response.json()
-        setDocuments(data || [])
-      }
+      console.log('📋 Loading documents...')
+      const data = await apiCall('/documents')
+      console.log(`   ✓ Loaded ${data.length} documents`)
+      setDocuments(data || [])
     } catch (error) {
       console.error('Failed to load documents:', error)
     }
@@ -593,20 +636,6 @@ function App() {
   }, [isAuthenticated, authToken])
 
   const TierIcon = currentUser ? SUBSCRIPTION_TIERS[currentUser.tier].icon : Zap
-
-  const getScoreColor = (score) => {
-    if (score >= 80) return '#22c55e'
-    if (score >= 60) return '#f59e0b'
-    if (score >= 40) return '#f97316'
-    return '#ef4444'
-  }
-
-  const getScoreGrade = (score) => {
-    if (score >= 80) return 'Excellent'
-    if (score >= 60) return 'Good'
-    if (score >= 40) return 'Fair'
-    return 'Poor'
-  }
 
   // If not authenticated, show login screen
   if (!isAuthenticated) {
@@ -775,6 +804,23 @@ function App() {
               {message.text}
             </div>
           )}
+          
+          {/* Debug info */}
+          {debugInfo && (
+            <div style={{
+              marginTop: '1rem',
+              padding: '1rem',
+              background: '#fff3cd',
+              borderRadius: '8px',
+              fontSize: '0.75rem',
+              color: '#856404'
+            }}>
+              <strong>Debug Info:</strong>
+              <pre style={{ margin: '0.5rem 0 0 0', whiteSpace: 'pre-wrap' }}>
+                {JSON.stringify(debugInfo, null, 2)}
+              </pre>
+            </div>
+          )}
         </div>
 
         <style>{`
@@ -788,6 +834,95 @@ function App() {
 
   return (
     <div style={{ fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif", minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f8f9fa' }}>
+      {/* Debug Toggle Button */}
+      <button
+        onClick={() => setShowDebug(!showDebug)}
+        style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          padding: '12px',
+          background: '#667eea',
+          color: '#fff',
+          border: 'none',
+          borderRadius: '50%',
+          cursor: 'pointer',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          zIndex: 1000,
+          fontSize: '20px'
+        }}
+        title="Toggle Debug Info"
+      >
+        🐛
+      </button>
+
+      {/* Debug Panel */}
+      {showDebug && (
+        <div style={{
+          position: 'fixed',
+          bottom: '80px',
+          right: '20px',
+          width: '400px',
+          maxHeight: '500px',
+          overflowY: 'auto',
+          background: '#fff',
+          border: '2px solid #667eea',
+          borderRadius: '12px',
+          padding: '1rem',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+          zIndex: 1000,
+          fontSize: '0.75rem'
+        }}>
+          <h3 style={{ margin: '0 0 1rem 0', color: '#667eea' }}>🐛 Debug Info</h3>
+          
+          <div style={{ marginBottom: '1rem' }}>
+            <strong>Auth Status:</strong>
+            <pre style={{ margin: '0.5rem 0', background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', whiteSpace: 'pre-wrap' }}>
+              {JSON.stringify({
+                authenticated: isAuthenticated,
+                token: authToken ? `${authToken.substring(0, 20)}...` : null,
+                user: currentUser ? {
+                  email: currentUser.email,
+                  tier: currentUser.tier,
+                  usage: `${currentUser.translations_used}/${currentUser.translations_limit}`
+                } : null
+              }, null, 2)}
+            </pre>
+          </div>
+          
+          {debugInfo && (
+            <div style={{ marginBottom: '1rem' }}>
+              <strong>Last Error:</strong>
+              <pre style={{ margin: '0.5rem 0', background: '#fff3cd', padding: '0.5rem', borderRadius: '4px', color: '#856404', whiteSpace: 'pre-wrap' }}>
+                {JSON.stringify(debugInfo, null, 2)}
+              </pre>
+            </div>
+          )}
+          
+          <button
+            onClick={() => {
+              console.log('=== FULL STATE DUMP ===')
+              console.log('Auth:', { isAuthenticated, authToken: authToken?.substring(0, 20), currentUser })
+              console.log('Documents:', documents)
+              console.log('Debug Info:', debugInfo)
+              alert('Full state logged to console (F12)')
+            }}
+            style={{
+              width: '100%',
+              padding: '0.5rem',
+              background: '#667eea',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontSize: '0.75rem'
+            }}
+          >
+            Log Full State to Console
+          </button>
+        </div>
+      )}
+
       {/* Payment Success Modal */}
       {showPaymentSuccessModal && paymentSuccessData && (
         <div style={{
@@ -814,7 +949,6 @@ function App() {
             animation: 'celebrationSlideIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
             textAlign: 'center'
           }}>
-            {/* Confetti Effect */}
             <div style={{
               position: 'absolute',
               top: '-50px',
@@ -921,318 +1055,6 @@ function App() {
             >
               Start Translating! →
             </button>
-
-            <p style={{
-              fontSize: '0.9rem',
-              color: '#999',
-              marginTop: '1.5rem',
-              fontStyle: 'italic',
-              animation: 'fadeInUp 0.6s ease-out 0.8s backwards'
-            }}>
-              Your subscription has been activated immediately
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Metrics Modal */}
-      {showMetricsModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1002,
-          backdropFilter: 'blur(8px)'
-        }}>
-          <div style={{
-            backgroundColor: '#ffffff',
-            borderRadius: '24px',
-            padding: '3rem',
-            maxWidth: '700px',
-            width: '90%',
-            maxHeight: '85vh',
-            overflowY: 'auto',
-            boxShadow: '0 24px 80px rgba(0, 0, 0, 0.4)',
-            position: 'relative',
-            animation: 'modalSlideIn 0.4s ease-out'
-          }}>
-            <button
-              onClick={() => {
-                setShowMetricsModal(false)
-                setMetricsData(null)
-                setCurrentMetricsDoc(null)
-              }}
-              style={{
-                position: 'absolute',
-                top: '1.5rem',
-                right: '1.5rem',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '0.5rem',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f0f0'}
-              onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-            >
-              <X size={24} color="#666" />
-            </button>
-
-            <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-              <div style={{
-                width: '100px',
-                height: '100px',
-                margin: '0 auto 1.5rem',
-                background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 12px 40px rgba(59, 130, 246, 0.4)'
-              }}>
-                <BarChart3 size={50} color="#fff" />
-              </div>
-
-              <h2 style={{
-                fontSize: '2rem',
-                fontWeight: '900',
-                color: '#1a1a2e',
-                marginBottom: '0.5rem',
-                lineHeight: '1.2'
-              }}>
-                Translation Quality Metrics
-              </h2>
-
-              <p style={{
-                fontSize: '1rem',
-                color: '#666',
-                marginBottom: '0.5rem'
-              }}>
-                {currentMetricsDoc?.filename}
-              </p>
-            </div>
-
-            {metricsLoading ? (
-              <div style={{ textAlign: 'center', padding: '3rem 0' }}>
-                <div style={{
-                  width: '60px',
-                  height: '60px',
-                  border: '4px solid #e0e0e0',
-                  borderTopColor: '#3b82f6',
-                  borderRadius: '50%',
-                  animation: 'spin 1s linear infinite',
-                  margin: '0 auto 1.5rem'
-                }}></div>
-                <p style={{ fontSize: '1rem', color: '#666' }}>
-                  Analyzing translation quality...
-                </p>
-              </div>
-            ) : metricsData ? (
-              <div>
-                {/* Metrics Grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
-                  {/* BLEU Score */}
-                  <div style={{
-                    background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-                    borderRadius: '16px',
-                    padding: '1.5rem',
-                    border: '2px solid #bfdbfe'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                      <div style={{
-                        width: '40px',
-                        height: '40px',
-                        background: getScoreColor(metricsData.bleu_score),
-                        borderRadius: '8px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <TrendingUp size={20} color="#fff" />
-                      </div>
-                      <div>
-                        <h3 style={{ fontSize: '0.875rem', color: '#1e40af', fontWeight: '700', margin: 0 }}>
-                          BLEU Score
-                        </h3>
-                        <p style={{ fontSize: '0.75rem', color: '#64748b', margin: 0 }}>
-                          Precision-based
-                        </p>
-                      </div>
-                    </div>
-                    <div style={{
-                      fontSize: '2.5rem',
-                      fontWeight: '900',
-                      color: getScoreColor(metricsData.bleu_score),
-                      marginBottom: '0.5rem'
-                    }}>
-                      {metricsData.bleu_score}
-                      <span style={{ fontSize: '1rem', fontWeight: '400', opacity: 0.7 }}>/100</span>
-                    </div>
-                    <div style={{
-                      fontSize: '0.875rem',
-                      fontWeight: '600',
-                      color: getScoreColor(metricsData.bleu_score)
-                    }}>
-                      {getScoreGrade(metricsData.bleu_score)}
-                    </div>
-                  </div>
-
-                  {/* ChrF Score */}
-                  <div style={{
-                    background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
-                    borderRadius: '16px',
-                    padding: '1.5rem',
-                    border: '2px solid #bbf7d0'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                      <div style={{
-                        width: '40px',
-                        height: '40px',
-                        background: getScoreColor(metricsData.chrf_score),
-                        borderRadius: '8px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <TrendingUp size={20} color="#fff" />
-                      </div>
-                      <div>
-                        <h3 style={{ fontSize: '0.875rem', color: '#15803d', fontWeight: '700', margin: 0 }}>
-                          ChrF Score
-                        </h3>
-                        <p style={{ fontSize: '0.75rem', color: '#64748b', margin: 0 }}>
-                          Character F-score
-                        </p>
-                      </div>
-                    </div>
-                    <div style={{
-                      fontSize: '2.5rem',
-                      fontWeight: '900',
-                      color: getScoreColor(metricsData.chrf_score),
-                      marginBottom: '0.5rem'
-                    }}>
-                      {metricsData.chrf_score}
-                      <span style={{ fontSize: '1rem', fontWeight: '400', opacity: 0.7 }}>/100</span>
-                    </div>
-                    <div style={{
-                      fontSize: '0.875rem',
-                      fontWeight: '600',
-                      color: getScoreColor(metricsData.chrf_score)
-                    }}>
-                      {getScoreGrade(metricsData.chrf_score)}
-                    </div>
-                  </div>
-
-                  {/* METEOR Score */}
-                  <div style={{
-                    background: 'linear-gradient(135deg, #fefce8 0%, #fef3c7 100%)',
-                    borderRadius: '16px',
-                    padding: '1.5rem',
-                    border: '2px solid #fde68a',
-                    gridColumn: 'span 2'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                      <div style={{
-                        width: '40px',
-                        height: '40px',
-                        background: getScoreColor(metricsData.meteor_score),
-                        borderRadius: '8px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <TrendingUp size={20} color="#fff" />
-                      </div>
-                      <div>
-                        <h3 style={{ fontSize: '0.875rem', color: '#92400e', fontWeight: '700', margin: 0 }}>
-                          METEOR Score
-                        </h3>
-                        <p style={{ fontSize: '0.75rem', color: '#64748b', margin: 0 }}>
-                          Semantic alignment
-                        </p>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem' }}>
-                      <div style={{
-                        fontSize: '2.5rem',
-                        fontWeight: '900',
-                        color: getScoreColor(metricsData.meteor_score)
-                      }}>
-                        {metricsData.meteor_score}
-                        <span style={{ fontSize: '1rem', fontWeight: '400', opacity: 0.7 }}>/100</span>
-                      </div>
-                      <div style={{
-                        fontSize: '0.875rem',
-                        fontWeight: '600',
-                        color: getScoreColor(metricsData.meteor_score)
-                      }}>
-                        {getScoreGrade(metricsData.meteor_score)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Info Section */}
-                <div style={{
-                  background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-                  borderRadius: '16px',
-                  padding: '1.5rem',
-                  border: '1px solid #e2e8f0',
-                  marginBottom: '1.5rem'
-                }}>
-                  <h3 style={{
-                    fontSize: '1rem',
-                    fontWeight: '700',
-                    color: '#1e293b',
-                    marginBottom: '1rem'
-                  }}>
-                    📊 Understanding These Metrics
-                  </h3>
-                  <div style={{ fontSize: '0.875rem', color: '#475569', lineHeight: '1.7' }}>
-                    <p style={{ margin: '0 0 0.75rem 0' }}>
-                      <strong>BLEU:</strong> Measures precision of word matches (higher = better word-level accuracy)
-                    </p>
-                    <p style={{ margin: '0 0 0.75rem 0' }}>
-                      <strong>ChrF:</strong> Character-level F-score (better for morphologically rich languages)
-                    </p>
-                    <p style={{ margin: '0' }}>
-                      <strong>METEOR:</strong> Considers synonyms and paraphrases (higher = better semantic meaning)
-                    </p>
-                  </div>
-                </div>
-
-                {/* Additional Info */}
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '1rem',
-                  background: '#f8f9fa',
-                  borderRadius: '12px',
-                  fontSize: '0.875rem',
-                  color: '#666'
-                }}>
-                  <span>Segments compared: <strong>{metricsData.segments_compared}</strong></span>
-                  <span>Calculated: <strong>{new Date(metricsData.calculated_at).toLocaleString()}</strong></span>
-                </div>
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '3rem 0' }}>
-                <AlertCircle size={60} color="#ef4444" style={{ margin: '0 auto 1rem' }} />
-                <p style={{ fontSize: '1rem', color: '#666' }}>
-                  Failed to load metrics data
-                </p>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -1399,15 +1221,6 @@ function App() {
                 Maybe Later
               </button>
             </div>
-
-            <p style={{
-              fontSize: '0.85rem',
-              color: '#999',
-              marginTop: '1.5rem',
-              fontStyle: 'italic'
-            }}>
-              Your limit will reset next month
-            </p>
           </div>
         </div>
       )}
@@ -1472,7 +1285,7 @@ function App() {
                 {currentOperation === 'uploading' ? (
                   <Upload size={40} color="#fff" />
                 ) : (
-                  <FileText size={40} color="#fff" />
+                  <RefreshCw size={40} color="#fff" style={{ animation: 'spin 2s linear infinite' }} />
                 )}
               </div>
 
@@ -1534,16 +1347,6 @@ function App() {
                   }}></div>
                 </div>
               </div>
-
-              <div style={{
-                width: '40px',
-                height: '40px',
-                border: '4px solid #e0e0e0',
-                borderTopColor: currentOperation === 'uploading' ? '#667eea' : '#f5576c',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-                margin: '0 auto'
-              }}></div>
 
               <p style={{
                 fontSize: '0.875rem',
@@ -2105,7 +1908,7 @@ function App() {
                       borderRadius: '12px',
                       padding: '1.5rem',
                       display: 'grid',
-                      gridTemplateColumns: 'auto 1fr auto auto auto auto',
+                      gridTemplateColumns: 'auto 1fr auto auto',
                       gap: '1.5rem',
                       alignItems: 'center',
                       transition: 'all 0.2s',
@@ -2145,17 +1948,6 @@ function App() {
                     </div>
 
                     <div style={{
-                      padding: '0.4rem 0.75rem',
-                      background: `${fileTypeInfo.color}15`,
-                      borderRadius: '6px',
-                      fontSize: '0.75rem',
-                      fontWeight: '600',
-                      color: fileTypeInfo.color
-                    }}>
-                      {fileTypeInfo.name}
-                    </div>
-
-                    <div style={{
                       padding: '0.5rem 1rem',
                       background: config.bg,
                       borderRadius: '8px',
@@ -2168,28 +1960,6 @@ function App() {
                         {doc.status}
                       </span>
                     </div>
-
-                    <button
-                      onClick={() => handleViewMetrics(doc.doc_id, doc.filename)}
-                      style={{
-                        padding: '0.75rem 1.5rem',
-                        background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
-                        border: 'none',
-                        borderRadius: '8px',
-                        color: '#ffffff',
-                        fontSize: '0.875rem',
-                        fontWeight: '600',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        transition: 'all 0.2s',
-                        boxShadow: '0 2px 8px rgba(59, 130, 246, 0.3)'
-                      }}
-                    >
-                      <BarChart3 size={16} />
-                      Metrics
-                    </button>
 
                     <button
                       onClick={() => handleDownload(doc.doc_id, doc.filename)}
@@ -2227,7 +1997,7 @@ function App() {
             Academic Document Translator
           </div>
           <div style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.7)', marginBottom: '0.5rem' }}>
-            Supporting DOCX • 11 South African Languages • Research & Academic Use
+            Supporting DOCX • 11+ Languages • Research & Academic Use
           </div>
           <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>
             Preserving academic integrity through professional translation • 2025
