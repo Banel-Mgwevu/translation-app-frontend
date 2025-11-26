@@ -70,6 +70,16 @@ const generateMetrics = (docId) => {
   }
 }
 
+// Validation helpers
+const validateEmail = (email) => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  return emailRegex.test(email)
+}
+
+const validatePassword = (password) => {
+  return password.length >= 5
+}
+
 function App() {
   // Authentication state
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -78,6 +88,8 @@ function App() {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [authMode, setAuthMode] = useState('signin')
   const [authForm, setAuthForm] = useState({ email: '', password: '', name: '' })
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [validationErrors, setValidationErrors] = useState({})
   
   // App state
   const [selectedFile, setSelectedFile] = useState(null)
@@ -132,6 +144,31 @@ function App() {
     const metrics = generateMetrics(doc.doc_id)
     setMetricsData(metrics)
     setShowMetricsModal(true)
+  }
+
+  // Validate form
+  const validateForm = () => {
+    const errors = {}
+    
+    if (!validateEmail(authForm.email)) {
+      errors.email = 'Please enter a valid email address'
+    }
+    
+    if (!validatePassword(authForm.password)) {
+      errors.password = 'Password must be at least 5 characters'
+    }
+    
+    if (authMode === 'signup') {
+      if (!authForm.name.trim()) {
+        errors.name = 'Name is required'
+      }
+      if (!acceptedTerms) {
+        errors.terms = 'You must accept the terms and conditions'
+      }
+    }
+    
+    setValidationErrors(errors)
+    return Object.keys(errors).length === 0
   }
 
   // Enhanced API call function with better error handling
@@ -346,6 +383,12 @@ function App() {
   // Handle authentication
   const handleAuth = async (e) => {
     e.preventDefault()
+    
+    // Validate form
+    if (!validateForm()) {
+      return
+    }
+    
     setLoading(true)
 
     try {
@@ -371,6 +414,8 @@ function App() {
       localStorage.setItem('user', JSON.stringify(data.user))
       setShowAuthModal(false)
       setAuthForm({ email: '', password: '', name: '' })
+      setAcceptedTerms(false)
+      setValidationErrors({})
       showMessage(`Welcome ${data.user.name}!`, 'success')
       loadDocuments(data.token)
 
@@ -747,16 +792,16 @@ function App() {
   if (!isAuthenticated) {
     return (
       <div style={{ fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif", minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-        <div style={{ background: '#ffffff', borderRadius: '24px', padding: '3rem', maxWidth: '450px', width: '90%', boxShadow: '0 24px 80px rgba(0, 0, 0, 0.3)' }}>
+        <div style={{ background: '#ffffff', borderRadius: '24px', padding: '2.5rem', maxWidth: '420px', width: '90%', boxShadow: '0 24px 80px rgba(0, 0, 0, 0.3)' }}>
           {/* Logo */}
-          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            <div style={{ width: '80px', height: '80px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem', boxShadow: '0 8px 24px rgba(102, 126, 234, 0.4)' }}>
-              <FileText size={40} color="#fff" />
+          <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+            <div style={{ width: '64px', height: '64px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem', boxShadow: '0 8px 24px rgba(102, 126, 234, 0.4)' }}>
+              <FileText size={32} color="#fff" />
             </div>
-            <h1 style={{ fontSize: '2rem', fontWeight: '900', color: '#1a1a2e', marginBottom: '0.5rem' }}>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#1a1a2e', marginBottom: '0.25rem' }}>
               Academic Translator
             </h1>
-            <p style={{ fontSize: '1rem', color: '#666' }}>
+            <p style={{ fontSize: '0.875rem', color: '#666' }}>
               DOCX Translation Service
             </p>
           </div>
@@ -764,96 +809,167 @@ function App() {
           {/* Auth Form */}
           <form onSubmit={handleAuth}>
             {authMode === 'signup' && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: '#555', marginBottom: '0.5rem' }}>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '600', color: '#555', marginBottom: '0.375rem' }}>
                   Full Name
                 </label>
                 <div style={{ position: 'relative' }}>
-                  <User size={20} color="#999" style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)' }} />
+                  <User size={18} color="#999" style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)' }} />
                   <input
                     type="text"
                     value={authForm.name}
-                    onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })}
-                    required={authMode === 'signup'}
+                    onChange={(e) => {
+                      setAuthForm({ ...authForm, name: e.target.value })
+                      if (validationErrors.name) {
+                        setValidationErrors({ ...validationErrors, name: '' })
+                      }
+                    }}
                     placeholder="John Doe"
                     style={{
                       width: '100%',
-                      padding: '0.75rem 1rem 0.75rem 3rem',
-                      border: '2px solid #e0e0e0',
-                      borderRadius: '12px',
-                      fontSize: '1rem',
+                      padding: '0.625rem 0.875rem 0.625rem 2.5rem',
+                      border: validationErrors.name ? '2px solid #ef4444' : '2px solid #e0e0e0',
+                      borderRadius: '10px',
+                      fontSize: '0.9rem',
                       transition: 'border-color 0.2s'
                     }}
-                    onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                    onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
+                    onFocus={(e) => e.target.style.borderColor = validationErrors.name ? '#ef4444' : '#667eea'}
+                    onBlur={(e) => e.target.style.borderColor = validationErrors.name ? '#ef4444' : '#e0e0e0'}
                   />
                 </div>
+                {validationErrors.name && (
+                  <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem', marginBottom: 0 }}>{validationErrors.name}</p>
+                )}
               </div>
             )}
 
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: '#555', marginBottom: '0.5rem' }}>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '600', color: '#555', marginBottom: '0.375rem' }}>
                 Email Address
               </label>
               <div style={{ position: 'relative' }}>
-                <Mail size={20} color="#999" style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)' }} />
+                <Mail size={18} color="#999" style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)' }} />
                 <input
                   type="email"
                   value={authForm.email}
-                  onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
+                  onChange={(e) => {
+                    setAuthForm({ ...authForm, email: e.target.value })
+                    if (validationErrors.email) {
+                      setValidationErrors({ ...validationErrors, email: '' })
+                    }
+                  }}
                   required
                   placeholder="your@email.com"
                   style={{
                     width: '100%',
-                    padding: '0.75rem 1rem 0.75rem 3rem',
-                    border: '2px solid #e0e0e0',
-                    borderRadius: '12px',
-                    fontSize: '1rem',
+                    padding: '0.625rem 0.875rem 0.625rem 2.5rem',
+                    border: validationErrors.email ? '2px solid #ef4444' : '2px solid #e0e0e0',
+                    borderRadius: '10px',
+                    fontSize: '0.9rem',
                     transition: 'border-color 0.2s'
                   }}
-                  onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                  onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
+                  onFocus={(e) => e.target.style.borderColor = validationErrors.email ? '#ef4444' : '#667eea'}
+                  onBlur={(e) => e.target.style.borderColor = validationErrors.email ? '#ef4444' : '#e0e0e0'}
                 />
               </div>
+              {validationErrors.email && (
+                <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem', marginBottom: 0 }}>{validationErrors.email}</p>
+              )}
             </div>
 
-            <div style={{ marginBottom: '2rem' }}>
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '600', color: '#555', marginBottom: '0.5rem' }}>
+            <div style={{ marginBottom: authMode === 'signup' ? '1rem' : '1.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '600', color: '#555', marginBottom: '0.375rem' }}>
                 Password
               </label>
               <div style={{ position: 'relative' }}>
-                <Lock size={20} color="#999" style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)' }} />
+                <Lock size={18} color="#999" style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)' }} />
                 <input
                   type="password"
                   value={authForm.password}
-                  onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
+                  onChange={(e) => {
+                    setAuthForm({ ...authForm, password: e.target.value })
+                    if (validationErrors.password) {
+                      setValidationErrors({ ...validationErrors, password: '' })
+                    }
+                  }}
                   required
                   placeholder="••••••••"
                   style={{
                     width: '100%',
-                    padding: '0.75rem 1rem 0.75rem 3rem',
-                    border: '2px solid #e0e0e0',
-                    borderRadius: '12px',
-                    fontSize: '1rem',
+                    padding: '0.625rem 0.875rem 0.625rem 2.5rem',
+                    border: validationErrors.password ? '2px solid #ef4444' : '2px solid #e0e0e0',
+                    borderRadius: '10px',
+                    fontSize: '0.9rem',
                     transition: 'border-color 0.2s'
                   }}
-                  onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                  onBlur={(e) => e.target.style.borderColor = '#e0e0e0'}
+                  onFocus={(e) => e.target.style.borderColor = validationErrors.password ? '#ef4444' : '#667eea'}
+                  onBlur={(e) => e.target.style.borderColor = validationErrors.password ? '#ef4444' : '#e0e0e0'}
                 />
               </div>
+              {validationErrors.password && (
+                <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem', marginBottom: 0 }}>{validationErrors.password}</p>
+              )}
+              {authMode === 'signup' && !validationErrors.password && (
+                <p style={{ color: '#888', fontSize: '0.7rem', marginTop: '0.25rem', marginBottom: 0 }}>Minimum 5 characters</p>
+              )}
             </div>
+
+            {/* Terms and Conditions Checkbox - Only for signup */}
+            {authMode === 'signup' && (
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ 
+                  display: 'flex', 
+                  alignItems: 'flex-start', 
+                  gap: '0.625rem',
+                  cursor: 'pointer',
+                  fontSize: '0.8rem',
+                  color: '#555'
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={acceptedTerms}
+                    onChange={(e) => {
+                      setAcceptedTerms(e.target.checked)
+                      if (validationErrors.terms) {
+                        setValidationErrors({ ...validationErrors, terms: '' })
+                      }
+                    }}
+                    style={{
+                      width: '16px',
+                      height: '16px',
+                      marginTop: '2px',
+                      accentColor: '#667eea',
+                      cursor: 'pointer'
+                    }}
+                  />
+                  <span>
+                    I agree to the{' '}
+                    <a href="#" style={{ color: '#667eea', textDecoration: 'underline' }} onClick={(e) => e.preventDefault()}>
+                      Terms of Service
+                    </a>{' '}
+                    and{' '}
+                    <a href="#" style={{ color: '#667eea', textDecoration: 'underline' }} onClick={(e) => e.preventDefault()}>
+                      Privacy Policy
+                    </a>
+                  </span>
+                </label>
+                {validationErrors.terms && (
+                  <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.375rem', marginBottom: 0, marginLeft: '1.625rem' }}>{validationErrors.terms}</p>
+                )}
+              </div>
+            )}
 
             <button
               type="submit"
               disabled={loading}
               style={{
                 width: '100%',
-                padding: '1rem',
+                padding: '0.875rem',
                 background: loading ? '#e0e0e0' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
                 color: '#ffffff',
                 border: 'none',
-                borderRadius: '12px',
-                fontSize: '1rem',
+                borderRadius: '10px',
+                fontSize: '0.95rem',
                 fontWeight: '700',
                 cursor: loading ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s',
@@ -861,17 +977,17 @@ function App() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '0.5rem',
-                marginBottom: '1rem'
+                marginBottom: '0.875rem'
               }}
             >
               {loading ? (
                 <>
-                  <div style={{ width: '20px', height: '20px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                  <div style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
                   Processing...
                 </>
               ) : (
                 <>
-                  {authMode === 'signin' ? <LogIn size={20} /> : <UserPlus size={20} />}
+                  {authMode === 'signin' ? <LogIn size={18} /> : <UserPlus size={18} />}
                   {authMode === 'signin' ? 'Sign In' : 'Sign Up'}
                 </>
               )}
@@ -880,12 +996,16 @@ function App() {
             <div style={{ textAlign: 'center' }}>
               <button
                 type="button"
-                onClick={() => setAuthMode(authMode === 'signin' ? 'signup' : 'signin')}
+                onClick={() => {
+                  setAuthMode(authMode === 'signin' ? 'signup' : 'signin')
+                  setValidationErrors({})
+                  setAcceptedTerms(false)
+                }}
                 style={{
                   background: 'transparent',
                   border: 'none',
                   color: '#667eea',
-                  fontSize: '0.95rem',
+                  fontSize: '0.875rem',
                   fontWeight: '600',
                   cursor: 'pointer',
                   textDecoration: 'underline'
@@ -898,36 +1018,18 @@ function App() {
 
           {message && (
             <div style={{
-              marginTop: '1.5rem',
-              padding: '1rem',
-              borderRadius: '12px',
+              marginTop: '1.25rem',
+              padding: '0.875rem',
+              borderRadius: '10px',
               backgroundColor: message.type === 'success' ? '#d4edda' : '#f8d7da',
               border: `1px solid ${message.type === 'success' ? '#c3e6cb' : '#f5c6cb'}`,
               color: message.type === 'success' ? '#155724' : '#721c24',
-              fontSize: '0.9rem',
+              fontSize: '0.85rem',
               textAlign: 'center'
             }}>
               {message.text}
             </div>
           )}
-          
-          {/* Debug info */}
-          {/* {debugInfo && (
-            <div style={{
-              marginTop: '1rem',
-              padding: '1rem',
-              background: '#fff3cd',
-              borderRadius: '8px',
-              fontSize: '0.75rem',
-              color: '#856404'
-            }}>
-              <strong>Debug Info:</strong>
-              <pre style={{ margin: '0.5rem 0 0 0', whiteSpace: 'pre-wrap' }}>
-                {JSON.stringify(debugInfo, null, 2)}
-              </pre>
-            </div>
-          )} */}
-       
         </div>
 
         <style>{`
@@ -1030,834 +1132,8 @@ function App() {
         </div>
       )}
 
-      {/* Evaluation Metrics Modal */}
+      {/* Evaluation Metrics Modal - COMPACT */}
       {showMetricsModal && metricsData && selectedDocForMetrics && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.85)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1002,
-          backdropFilter: 'blur(8px)'
-        }}>
-          <div style={{
-            backgroundColor: '#ffffff',
-            borderRadius: '24px',
-            padding: '3rem',
-            maxWidth: '700px',
-            width: '90%',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            boxShadow: '0 24px 80px rgba(0, 0, 0, 0.4)',
-            position: 'relative',
-            animation: 'modalSlideIn 0.4s ease-out'
-          }}>
-            <button
-              onClick={() => {
-                setShowMetricsModal(false)
-                setSelectedDocForMetrics(null)
-                setMetricsData(null)
-              }}
-              style={{
-                position: 'absolute',
-                top: '1.5rem',
-                right: '1.5rem',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '0.5rem',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f0f0'}
-              onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-            >
-              <X size={24} color="#666" />
-            </button>
-
-            {/* Header */}
-            <div style={{ textAlign: 'center', marginBottom: '2.5rem' }}>
-              <div style={{
-                width: '100px',
-                height: '100px',
-                margin: '0 auto 1.5rem',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 12px 40px rgba(102, 126, 234, 0.4)',
-                animation: 'scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)'
-              }}>
-                <BarChart3 size={50} color="#fff" />
-              </div>
-
-              <h2 style={{
-                fontSize: '2rem',
-                fontWeight: '900',
-                color: '#1a1a2e',
-                marginBottom: '0.75rem',
-                lineHeight: '1.2'
-              }}>
-                Translation Quality Metrics
-              </h2>
-
-              <p style={{
-                fontSize: '1rem',
-                color: '#666',
-                marginBottom: '0.5rem'
-              }}>
-                {selectedDocForMetrics.filename}
-              </p>
-
-              <div style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                padding: '0.5rem 1rem',
-                background: '#f0f9ff',
-                borderRadius: '8px',
-                border: '1px solid #bae6fd'
-              }}>
-                <Target size={16} color="#0284c7" />
-                <span style={{ fontSize: '0.875rem', color: '#0c4a6e', fontWeight: '600' }}>
-                  Overall Score: {metricsData.overallScore}%
-                </span>
-              </div>
-            </div>
-
-            {/* Metrics Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
-              {/* BLEU Score */}
-              <div style={{
-                background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
-                borderRadius: '16px',
-                padding: '1.5rem',
-                border: '2px solid #bfdbfe',
-                transition: 'all 0.3s'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                  <div style={{
-                    width: '48px',
-                    height: '48px',
-                    background: '#3b82f6',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <Award size={24} color="#fff" />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.875rem', color: '#1e40af', fontWeight: '600' }}>BLEU Score</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Bilingual Evaluation</div>
-                  </div>
-                </div>
-                <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#1e40af', marginBottom: '0.5rem' }}>
-                  {metricsData.bleu}%
-                </div>
-                <div style={{ fontSize: '0.875rem', color: '#475569', lineHeight: '1.4' }}>
-                  Measures n-gram precision between translation and reference
-                </div>
-              </div>
-
-              {/* ChrF Score */}
-              <div style={{
-                background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
-                borderRadius: '16px',
-                padding: '1.5rem',
-                border: '2px solid #bbf7d0',
-                transition: 'all 0.3s'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                  <div style={{
-                    width: '48px',
-                    height: '48px',
-                    background: '#22c55e',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <TrendingUp size={24} color="#fff" />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.875rem', color: '#15803d', fontWeight: '600' }}>ChrF Score</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Character n-gram F-score</div>
-                  </div>
-                </div>
-                <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#15803d', marginBottom: '0.5rem' }}>
-                  {metricsData.chrf}%
-                </div>
-                <div style={{ fontSize: '0.875rem', color: '#475569', lineHeight: '1.4' }}>
-                  Character-level evaluation for morphologically rich languages
-                </div>
-              </div>
-
-              {/* METEOR Score */}
-              <div style={{
-                background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-                borderRadius: '16px',
-                padding: '1.5rem',
-                border: '2px solid #fcd34d',
-                transition: 'all 0.3s'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                  <div style={{
-                    width: '48px',
-                    height: '48px',
-                    background: '#f59e0b',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <Target size={24} color="#fff" />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.875rem', color: '#92400e', fontWeight: '600' }}>METEOR Score</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Metric for Evaluation</div>
-                  </div>
-                </div>
-                <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#92400e', marginBottom: '0.5rem' }}>
-                  {metricsData.meteor}%
-                </div>
-                <div style={{ fontSize: '0.875rem', color: '#475569', lineHeight: '1.4' }}>
-                  Considers synonyms, stemming, and paraphrasing
-                </div>
-              </div>
-
-              {/* MXM Score */}
-              <div style={{
-                background: 'linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%)',
-                borderRadius: '16px',
-                padding: '1.5rem',
-                border: '2px solid #f9a8d4',
-                transition: 'all 0.3s'
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                  <div style={{
-                    width: '48px',
-                    height: '48px',
-                    background: '#ec4899',
-                    borderRadius: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <Percent size={24} color="#fff" />
-                  </div>
-                  <div>
-                    <div style={{ fontSize: '0.875rem', color: '#831843', fontWeight: '600' }}>MXM Score</div>
-                    <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Maximum Match Metric</div>
-                  </div>
-                </div>
-                <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#831843', marginBottom: '0.5rem' }}>
-                  {metricsData.mxm}%
-                </div>
-                <div style={{ fontSize: '0.875rem', color: '#475569', lineHeight: '1.4' }}>
-                  Evaluates semantic similarity and fluency
-                </div>
-              </div>
-            </div>
-
-            {/* Info Box */}
-            <div style={{
-              background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
-              borderRadius: '16px',
-              padding: '1.5rem',
-              border: '2px solid #bae6fd',
-              marginBottom: '1.5rem'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'start', gap: '1rem' }}>
-                <div style={{
-                  width: '40px',
-                  height: '40px',
-                  background: '#0284c7',
-                  borderRadius: '10px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}>
-                  <AlertCircle size={20} color="#fff" />
-                </div>
-                <div>
-                  <h4 style={{ fontSize: '0.95rem', fontWeight: '700', color: '#0c4a6e', marginBottom: '0.5rem' }}>
-                    About These Metrics
-                  </h4>
-                  <p style={{ fontSize: '0.875rem', color: '#0369a1', lineHeight: '1.6', margin: 0 }}>
-                    These evaluation metrics provide insights into translation quality across different dimensions. 
-                    Higher scores indicate better alignment with professional translation standards. Scores above 70% 
-                    are generally considered good quality.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <button
-                onClick={() => handleDownload(selectedDocForMetrics.doc_id, selectedDocForMetrics.filename)}
-                style={{
-                  flex: 1,
-                  padding: '1rem',
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontSize: '1rem',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem',
-                  boxShadow: '0 8px 24px rgba(102, 126, 234, 0.3)'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.transform = 'translateY(-2px)'
-                  e.target.style.boxShadow = '0 12px 32px rgba(102, 126, 234, 0.4)'
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.transform = 'translateY(0)'
-                  e.target.style.boxShadow = '0 8px 24px rgba(102, 126, 234, 0.3)'
-                }}
-              >
-                <Download size={20} />
-                Download Translation
-              </button>
-              
-              <button
-                onClick={() => {
-                  setShowMetricsModal(false)
-                  setSelectedDocForMetrics(null)
-                  setMetricsData(null)
-                }}
-                style={{
-                  padding: '1rem 2rem',
-                  background: 'transparent',
-                  color: '#666',
-                  border: '2px solid #e0e0e0',
-                  borderRadius: '12px',
-                  fontSize: '1rem',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.borderColor = '#667eea'
-                  e.target.style.color = '#667eea'
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.borderColor = '#e0e0e0'
-                  e.target.style.color = '#666'
-                }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Payment Pending Modal - Show after redirecting to Paystack */}
-      {showPaymentPendingModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.9)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1003,
-          backdropFilter: 'blur(12px)'
-        }}>
-          <div style={{
-            backgroundColor: '#ffffff',
-            borderRadius: '32px',
-            padding: '3rem',
-            maxWidth: '550px',
-            width: '90%',
-            boxShadow: '0 32px 100px rgba(0, 0, 0, 0.5)',
-            position: 'relative',
-            animation: 'modalSlideIn 0.4s ease-out',
-            textAlign: 'center'
-          }}>
-            <button
-              onClick={() => {
-                setShowPaymentPendingModal(false)
-                setPendingPaymentTier(null)
-                localStorage.removeItem('pendingPaymentTier')
-              }}
-              style={{
-                position: 'absolute',
-                top: '1.5rem',
-                right: '1.5rem',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '0.5rem',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              <X size={24} color="#666" />
-            </button>
-
-            <div style={{
-              width: '100px',
-              height: '100px',
-              margin: '0 auto 2rem',
-              background: 'linear-gradient(135deg, #FFC800 0%, #f59e0b 100%)',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 16px 50px rgba(255, 200, 0, 0.4)',
-              animation: 'pulse 2s ease-in-out infinite'
-            }}>
-              <Crown size={50} color="#000" />
-            </div>
-
-            <h2 style={{
-              fontSize: '1.75rem',
-              fontWeight: '900',
-              color: '#1a1a2e',
-              marginBottom: '1rem',
-              lineHeight: '1.2'
-            }}>
-              Complete Your Payment
-            </h2>
-
-            <p style={{
-              fontSize: '1.1rem',
-              color: '#666',
-              marginBottom: '1.5rem',
-              lineHeight: '1.6'
-            }}>
-              A new window has opened for you to complete your payment for the <strong>{SUBSCRIPTION_TIERS[pendingPaymentTier]?.name}</strong> plan (R{SUBSCRIPTION_TIERS[pendingPaymentTier]?.price}/month).
-            </p>
-
-            <div style={{
-              background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
-              borderRadius: '16px',
-              padding: '1.5rem',
-              marginBottom: '2rem',
-              border: '2px solid #bae6fd',
-              textAlign: 'left'
-            }}>
-              <h4 style={{ fontSize: '1rem', fontWeight: '700', color: '#0c4a6e', marginBottom: '1rem' }}>
-                📋 Instructions:
-              </h4>
-              <ol style={{ margin: 0, paddingLeft: '1.25rem', color: '#0369a1', lineHeight: '1.8' }}>
-                <li>Complete the payment in the Paystack window</li>
-                <li>Use the <strong>same email</strong> you registered with: <strong>{currentUser?.email}</strong></li>
-                <li>Once payment is complete, click the button below</li>
-              </ol>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <button
-                onClick={verifyPaymentAndUpgrade}
-                disabled={verifyingPayment}
-                style={{
-                  width: '100%',
-                  padding: '1.25rem',
-                  background: verifyingPayment ? '#e0e0e0' : 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '16px',
-                  fontSize: '1.1rem',
-                  fontWeight: '700',
-                  cursor: verifyingPayment ? 'not-allowed' : 'pointer',
-                  transition: 'all 0.3s',
-                  boxShadow: verifyingPayment ? 'none' : '0 12px 32px rgba(34, 197, 94, 0.4)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.75rem'
-                }}
-              >
-                {verifyingPayment ? (
-                  <>
-                    <div style={{ width: '24px', height: '24px', border: '3px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                    Verifying Payment...
-                  </>
-                ) : (
-                  <>
-                    <Check size={24} />
-                    I've Completed Payment - Activate My Plan
-                  </>
-                )}
-              </button>
-
-              <button
-                onClick={() => window.open('https://paystack.shop/pay/8zcv4xhc7r', '_blank')}
-                style={{
-                  width: '100%',
-                  padding: '1rem',
-                  background: 'transparent',
-                  color: '#667eea',
-                  border: '2px solid #667eea',
-                  borderRadius: '12px',
-                  fontSize: '1rem',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                <ExternalLink size={18} />
-                Re-open Payment Page
-              </button>
-
-              <button
-                onClick={() => {
-                  setShowPaymentPendingModal(false)
-                  setPendingPaymentTier(null)
-                  localStorage.removeItem('pendingPaymentTier')
-                }}
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  background: 'transparent',
-                  color: '#999',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '0.9rem',
-                  fontWeight: '500',
-                  cursor: 'pointer'
-                }}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Payment Success Modal */}
-      {showPaymentSuccessModal && paymentSuccessData && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.9)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1003,
-          backdropFilter: 'blur(12px)'
-        }}>
-          <div style={{
-            backgroundColor: '#ffffff',
-            borderRadius: '32px',
-            padding: '4rem 3rem',
-            maxWidth: '600px',
-            width: '90%',
-            boxShadow: '0 32px 100px rgba(0, 0, 0, 0.5)',
-            position: 'relative',
-            animation: 'celebrationSlideIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)',
-            textAlign: 'center'
-          }}>
-            <div style={{
-              position: 'absolute',
-              top: '-50px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              fontSize: '80px',
-              animation: 'bounce 1s ease-in-out infinite'
-            }}>
-              🎉
-            </div>
-
-            <div style={{
-              width: '120px',
-              height: '120px',
-              margin: '0 auto 2rem',
-              background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 16px 50px rgba(34, 197, 94, 0.5)',
-              animation: 'scaleIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.3s backwards'
-            }}>
-              <Check size={70} color="#fff" strokeWidth={3} />
-            </div>
-
-            <h2 style={{
-              fontSize: '2.5rem',
-              fontWeight: '900',
-              color: '#1a1a2e',
-              marginBottom: '1rem',
-              lineHeight: '1.2',
-              animation: 'fadeInUp 0.6s ease-out 0.4s backwards'
-            }}>
-              Payment Successful! 🎊
-            </h2>
-
-            <p style={{
-              fontSize: '1.2rem',
-              color: '#666',
-              marginBottom: '2rem',
-              lineHeight: '1.6',
-              animation: 'fadeInUp 0.6s ease-out 0.5s backwards'
-            }}>
-              Welcome to <strong>{SUBSCRIPTION_TIERS[paymentSuccessData.tier]?.name}</strong> plan!
-            </p>
-
-            <div style={{
-              background: 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)',
-              borderRadius: '20px',
-              padding: '2rem',
-              marginBottom: '2.5rem',
-              border: '2px solid #bbf7d0',
-              animation: 'fadeInUp 0.6s ease-out 0.6s backwards'
-            }}>
-              <h3 style={{
-                fontSize: '1.2rem',
-                fontWeight: '700',
-                color: '#15803d',
-                marginBottom: '1.5rem'
-              }}>
-                🚀 Your New Benefits
-              </h3>
-              <div style={{ textAlign: 'left', display: 'inline-block' }}>
-                {SUBSCRIPTION_TIERS[paymentSuccessData.tier]?.features.map((feature, idx) => (
-                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Check size={16} color="#fff" strokeWidth={3} />
-                    </div>
-                    <span style={{ fontSize: '1rem', color: '#15803d', fontWeight: '500' }}>{feature}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <button
-              onClick={() => {
-                setShowPaymentSuccessModal(false)
-                setPaymentSuccessData(null)
-                setShowSubscription(false)
-              }}
-              style={{
-                width: '100%',
-                padding: '1.25rem',
-                background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '16px',
-                fontSize: '1.2rem',
-                fontWeight: '700',
-                cursor: 'pointer',
-                transition: 'all 0.3s',
-                boxShadow: '0 12px 32px rgba(34, 197, 94, 0.4)',
-                animation: 'fadeInUp 0.6s ease-out 0.7s backwards'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.transform = 'translateY(-2px)'
-                e.target.style.boxShadow = '0 16px 40px rgba(34, 197, 94, 0.5)'
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.transform = 'translateY(0)'
-                e.target.style.boxShadow = '0 12px 32px rgba(34, 197, 94, 0.4)'
-              }}
-            >
-              Start Translating! →
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Limit Reached Modal */}
-      {showLimitModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1001,
-          backdropFilter: 'blur(8px)'
-        }}>
-          <div style={{
-            backgroundColor: '#ffffff',
-            borderRadius: '24px',
-            padding: '3rem',
-            maxWidth: '600px',
-            width: '90%',
-            boxShadow: '0 24px 80px rgba(0, 0, 0, 0.4)',
-            position: 'relative',
-            animation: 'modalSlideIn 0.4s ease-out',
-            textAlign: 'center'
-          }}>
-            <button
-              onClick={() => setShowLimitModal(false)}
-              style={{
-                position: 'absolute',
-                top: '1.5rem',
-                right: '1.5rem',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '0.5rem',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f0f0'}
-              onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
-            >
-              <X size={24} color="#666" />
-            </button>
-
-            <div style={{
-              width: '100px',
-              height: '100px',
-              margin: '0 auto 2rem',
-              background: 'linear-gradient(135deg, #FFC800 0%, #f59e0b 100%)',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 12px 40px rgba(255, 200, 0, 0.4)',
-              animation: 'pulse 2s ease-in-out infinite'
-            }}>
-              <Crown size={50} color="#000" />
-            </div>
-
-            <h2 style={{
-              fontSize: '2rem',
-              fontWeight: '900',
-              color: '#1a1a2e',
-              marginBottom: '1rem',
-              lineHeight: '1.2'
-            }}>
-              Translation Limit Reached!
-            </h2>
-
-            <p style={{
-              fontSize: '1.1rem',
-              color: '#666',
-              marginBottom: '1.5rem',
-              lineHeight: '1.6'
-            }}>
-              You've completed all <strong>{currentUser.translations_limit}</strong> translations in your {SUBSCRIPTION_TIERS[currentUser.tier].name} plan this month.
-            </p>
-
-            <div style={{
-              background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
-              borderRadius: '16px',
-              padding: '1.5rem',
-              marginBottom: '2rem',
-              border: '2px solid #bae6fd'
-            }}>
-              <h3 style={{
-                fontSize: '1.1rem',
-                fontWeight: '700',
-                color: '#0c4a6e',
-                marginBottom: '1rem'
-              }}>
-                Upgrade to continue translating
-              </h3>
-              <div style={{ textAlign: 'left', display: 'inline-block' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Check size={14} color="#fff" />
-                  </div>
-                  <span style={{ fontSize: '0.95rem', color: '#0c4a6e', fontWeight: '500' }}>Translate up to 20 or unlimited documents</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Check size={14} color="#fff" />
-                  </div>
-                  <span style={{ fontSize: '0.95rem', color: '#0c4a6e', fontWeight: '500' }}>Priority processing & support</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Check size={14} color="#fff" />
-                  </div>
-                  <span style={{ fontSize: '0.95rem', color: '#0c4a6e', fontWeight: '500' }}>DOCX support</span>
-                </div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '1rem', justifyContent: 'center' }}>
-              <button
-                onClick={() => {
-                  setShowLimitModal(false)
-                  setShowSubscription(true)
-                }}
-                style={{
-                  padding: '1rem 2.5rem',
-                  background: 'linear-gradient(135deg, #FFC800 0%, #f59e0b 100%)',
-                  color: '#000',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontSize: '1.1rem',
-                  fontWeight: '700',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s',
-                  boxShadow: '0 8px 24px rgba(255, 200, 0, 0.3)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.5rem'
-                }}
-              >
-                <Crown size={20} />
-                View Premium Plans
-              </button>
-              
-              <button
-                onClick={() => setShowLimitModal(false)}
-                style={{
-                  padding: '1rem 2rem',
-                  background: 'transparent',
-                  color: '#666',
-                  border: '2px solid #e0e0e0',
-                  borderRadius: '12px',
-                  fontSize: '1rem',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                Maybe Later
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Progress Modal */}
-      {showModal && (
         <div style={{
           position: 'fixed',
           top: 0,
@@ -1868,16 +1144,571 @@ function App() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          zIndex: 1000,
-          backdropFilter: 'blur(4px)'
+          zIndex: 1002,
+          padding: '1rem',
+          overflowY: 'auto'
         }}>
           <div style={{
             backgroundColor: '#ffffff',
-            borderRadius: '20px',
-            padding: '3rem',
-            maxWidth: '500px',
-            width: '90%',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+            borderRadius: '16px',
+            padding: '1.5rem',
+            maxWidth: '480px',
+            width: '100%',
+            boxShadow: '0 16px 48px rgba(0, 0, 0, 0.3)',
+            position: 'relative',
+            animation: 'modalSlideIn 0.3s ease-out',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            <button
+              onClick={() => {
+                setShowMetricsModal(false)
+                setSelectedDocForMetrics(null)
+                setMetricsData(null)
+              }}
+              style={{
+                position: 'absolute',
+                top: '1rem',
+                right: '1rem',
+                background: '#f5f5f5',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '0.375rem',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <X size={18} color="#666" />
+            </button>
+
+            {/* Header */}
+            <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+              <div style={{
+                width: '56px',
+                height: '56px',
+                margin: '0 auto 0.75rem',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <BarChart3 size={28} color="#fff" />
+              </div>
+
+              <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#1a1a2e', marginBottom: '0.25rem' }}>
+                Quality Metrics
+              </h2>
+
+              <p style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.5rem', wordBreak: 'break-all' }}>
+                {selectedDocForMetrics.filename}
+              </p>
+
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.375rem',
+                padding: '0.375rem 0.75rem',
+                background: '#f0f9ff',
+                borderRadius: '6px',
+                border: '1px solid #bae6fd'
+              }}>
+                <Target size={14} color="#0284c7" />
+                <span style={{ fontSize: '0.8rem', color: '#0c4a6e', fontWeight: '600' }}>
+                  Overall: {metricsData.overallScore}%
+                </span>
+              </div>
+            </div>
+
+            {/* Metrics Grid - Compact */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+              {[
+                { label: 'BLEU', value: metricsData.bleu, color: '#3b82f6', bg: '#eff6ff' },
+                { label: 'ChrF', value: metricsData.chrf, color: '#22c55e', bg: '#f0fdf4' },
+                { label: 'METEOR', value: metricsData.meteor, color: '#f59e0b', bg: '#fef3c7' },
+                { label: 'MXM', value: metricsData.mxm, color: '#ec4899', bg: '#fce7f3' }
+              ].map((metric) => (
+                <div key={metric.label} style={{
+                  background: metric.bg,
+                  borderRadius: '10px',
+                  padding: '0.875rem',
+                  textAlign: 'center'
+                }}>
+                  <div style={{ fontSize: '0.7rem', color: '#666', marginBottom: '0.25rem', fontWeight: '600' }}>
+                    {metric.label}
+                  </div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: '800', color: metric.color }}>
+                    {metric.value}%
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                onClick={() => handleDownload(selectedDocForMetrics.doc_id, selectedDocForMetrics.filename)}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '0.875rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.375rem'
+                }}
+              >
+                <Download size={16} />
+                Download
+              </button>
+              
+              <button
+                onClick={() => {
+                  setShowMetricsModal(false)
+                  setSelectedDocForMetrics(null)
+                  setMetricsData(null)
+                }}
+                style={{
+                  padding: '0.75rem 1.25rem',
+                  background: 'transparent',
+                  color: '#666',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '8px',
+                  fontSize: '0.875rem',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Pending Modal - COMPACT & SCROLLABLE */}
+      {showPaymentPendingModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1003,
+          padding: '1rem',
+          overflowY: 'auto'
+        }}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '16px',
+            padding: '1.5rem',
+            maxWidth: '400px',
+            width: '100%',
+            boxShadow: '0 16px 48px rgba(0, 0, 0, 0.3)',
+            position: 'relative',
+            animation: 'modalSlideIn 0.3s ease-out',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            <button
+              onClick={() => {
+                setShowPaymentPendingModal(false)
+                setPendingPaymentTier(null)
+                localStorage.removeItem('pendingPaymentTier')
+              }}
+              style={{
+                position: 'absolute',
+                top: '0.75rem',
+                right: '0.75rem',
+                background: '#f5f5f5',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '0.375rem',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <X size={18} color="#666" />
+            </button>
+
+            <div style={{ textAlign: 'center' }}>
+              <div style={{
+                width: '56px',
+                height: '56px',
+                margin: '0 auto 1rem',
+                background: 'linear-gradient(135deg, #FFC800 0%, #f59e0b 100%)',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Crown size={28} color="#000" />
+              </div>
+
+              <h2 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1a1a2e', marginBottom: '0.5rem' }}>
+                Complete Payment
+              </h2>
+
+              <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: '1rem' }}>
+                Upgrade to <strong>{SUBSCRIPTION_TIERS[pendingPaymentTier]?.name}</strong> for R{SUBSCRIPTION_TIERS[pendingPaymentTier]?.price}/month
+              </p>
+
+              <div style={{
+                background: '#f8f9fa',
+                borderRadius: '10px',
+                padding: '1rem',
+                marginBottom: '1rem',
+                textAlign: 'left',
+                fontSize: '0.8rem'
+              }}>
+                <p style={{ margin: '0 0 0.5rem 0', fontWeight: '600', color: '#333' }}>Steps:</p>
+                <ol style={{ margin: 0, paddingLeft: '1.25rem', color: '#555', lineHeight: '1.6' }}>
+                  <li>Complete payment in Paystack</li>
+                  <li>Use email: <strong>{currentUser?.email}</strong></li>
+                  <li>Click verify button below</li>
+                </ol>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+                <button
+                  onClick={verifyPaymentAndUpgrade}
+                  disabled={verifyingPayment}
+                  style={{
+                    width: '100%',
+                    padding: '0.875rem',
+                    background: verifyingPayment ? '#e0e0e0' : 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontSize: '0.9rem',
+                    fontWeight: '600',
+                    cursor: verifyingPayment ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem'
+                  }}
+                >
+                  {verifyingPayment ? (
+                    <>
+                      <div style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <Check size={18} />
+                      I've Paid - Activate Plan
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => window.open('https://paystack.shop/pay/8zcv4xhc7r', '_blank')}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    background: 'transparent',
+                    color: '#667eea',
+                    border: '1px solid #667eea',
+                    borderRadius: '8px',
+                    fontSize: '0.85rem',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.375rem'
+                  }}
+                >
+                  <ExternalLink size={16} />
+                  Open Payment Page
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowPaymentPendingModal(false)
+                    setPendingPaymentTier(null)
+                    localStorage.removeItem('pendingPaymentTier')
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    background: 'transparent',
+                    color: '#999',
+                    border: 'none',
+                    fontSize: '0.8rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Success Modal - COMPACT */}
+      {showPaymentSuccessModal && paymentSuccessData && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1003,
+          padding: '1rem',
+          overflowY: 'auto'
+        }}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '16px',
+            padding: '1.5rem',
+            maxWidth: '380px',
+            width: '100%',
+            boxShadow: '0 16px 48px rgba(0, 0, 0, 0.3)',
+            position: 'relative',
+            animation: 'modalSlideIn 0.3s ease-out',
+            textAlign: 'center',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            <div style={{
+              width: '64px',
+              height: '64px',
+              margin: '0 auto 1rem',
+              background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Check size={36} color="#fff" strokeWidth={3} />
+            </div>
+
+            <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#1a1a2e', marginBottom: '0.5rem' }}>
+              Payment Successful! 🎉
+            </h2>
+
+            <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '1rem' }}>
+              Welcome to <strong>{SUBSCRIPTION_TIERS[paymentSuccessData.tier]?.name}</strong>!
+            </p>
+
+            <div style={{
+              background: '#f0fdf4',
+              borderRadius: '10px',
+              padding: '1rem',
+              marginBottom: '1rem',
+              textAlign: 'left'
+            }}>
+              <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', fontWeight: '600', color: '#15803d' }}>
+                Your Benefits:
+              </p>
+              {SUBSCRIPTION_TIERS[paymentSuccessData.tier]?.features.slice(0, 4).map((feature, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.375rem' }}>
+                  <Check size={14} color="#22c55e" />
+                  <span style={{ fontSize: '0.8rem', color: '#166534' }}>{feature}</span>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => {
+                setShowPaymentSuccessModal(false)
+                setPaymentSuccessData(null)
+                setShowSubscription(false)
+              }}
+              style={{
+                width: '100%',
+                padding: '0.875rem',
+                background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '10px',
+                fontSize: '0.9rem',
+                fontWeight: '600',
+                cursor: 'pointer'
+              }}
+            >
+              Start Translating →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Limit Reached Modal - COMPACT */}
+      {showLimitModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1001,
+          padding: '1rem',
+          overflowY: 'auto'
+        }}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '16px',
+            padding: '1.5rem',
+            maxWidth: '400px',
+            width: '100%',
+            boxShadow: '0 16px 48px rgba(0, 0, 0, 0.3)',
+            position: 'relative',
+            animation: 'modalSlideIn 0.3s ease-out',
+            textAlign: 'center',
+            maxHeight: '90vh',
+            overflowY: 'auto'
+          }}>
+            <button
+              onClick={() => setShowLimitModal(false)}
+              style={{
+                position: 'absolute',
+                top: '0.75rem',
+                right: '0.75rem',
+                background: '#f5f5f5',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '0.375rem',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <X size={18} color="#666" />
+            </button>
+
+            <div style={{
+              width: '56px',
+              height: '56px',
+              margin: '0 auto 1rem',
+              background: 'linear-gradient(135deg, #FFC800 0%, #f59e0b 100%)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <Crown size={28} color="#000" />
+            </div>
+
+            <h2 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1a1a2e', marginBottom: '0.5rem' }}>
+              Limit Reached
+            </h2>
+
+            <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: '1rem' }}>
+              You've used all <strong>{currentUser.translations_limit}</strong> translations this month.
+            </p>
+
+            <div style={{
+              background: '#f8f9fa',
+              borderRadius: '10px',
+              padding: '1rem',
+              marginBottom: '1rem',
+              textAlign: 'left'
+            }}>
+              <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.8rem', fontWeight: '600', color: '#333' }}>
+                Upgrade to get:
+              </p>
+              {['Up to 20 or unlimited docs', 'Priority processing', 'Premium support'].map((item, idx) => (
+                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.375rem' }}>
+                  <Check size={14} color="#22c55e" />
+                  <span style={{ fontSize: '0.8rem', color: '#555' }}>{item}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.625rem' }}>
+              <button
+                onClick={() => {
+                  setShowLimitModal(false)
+                  setShowSubscription(true)
+                }}
+                style={{
+                  flex: 1,
+                  padding: '0.75rem',
+                  background: 'linear-gradient(135deg, #FFC800 0%, #f59e0b 100%)',
+                  color: '#000',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '0.875rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.375rem'
+                }}
+              >
+                <Crown size={16} />
+                View Plans
+              </button>
+              
+              <button
+                onClick={() => setShowLimitModal(false)}
+                style={{
+                  padding: '0.75rem 1rem',
+                  background: 'transparent',
+                  color: '#666',
+                  border: '1px solid #e0e0e0',
+                  borderRadius: '8px',
+                  fontSize: '0.875rem',
+                  fontWeight: '600',
+                  cursor: 'pointer'
+                }}
+              >
+                Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Progress Modal - COMPACT */}
+      {showModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '1rem'
+        }}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '16px',
+            padding: '1.5rem',
+            maxWidth: '360px',
+            width: '100%',
+            boxShadow: '0 16px 48px rgba(0, 0, 0, 0.25)',
             position: 'relative',
             animation: 'modalSlideIn 0.3s ease-out'
           }}>
@@ -1885,86 +1716,63 @@ function App() {
               onClick={() => setShowModal(false)}
               style={{
                 position: 'absolute',
-                top: '1rem',
-                right: '1rem',
-                background: 'transparent',
+                top: '0.75rem',
+                right: '0.75rem',
+                background: '#f5f5f5',
                 border: 'none',
                 cursor: 'pointer',
-                padding: '0.5rem',
+                padding: '0.375rem',
                 borderRadius: '50%',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.2s'
+                justifyContent: 'center'
               }}
             >
-              <X size={24} color="#666" />
+              <X size={18} color="#666" />
             </button>
 
             <div style={{ textAlign: 'center' }}>
               <div style={{
-                width: '80px',
-                height: '80px',
-                margin: '0 auto 1.5rem',
+                width: '56px',
+                height: '56px',
+                margin: '0 auto 1rem',
                 background: currentOperation === 'uploading' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
                 borderRadius: '50%',
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 8px 24px rgba(102, 126, 234, 0.3)'
+                justifyContent: 'center'
               }}>
                 {currentOperation === 'uploading' ? (
-                  <Upload size={40} color="#fff" />
+                  <Upload size={28} color="#fff" />
                 ) : (
-                  <RefreshCw size={40} color="#fff" style={{ animation: 'spin 2s linear infinite' }} />
+                  <RefreshCw size={28} color="#fff" style={{ animation: 'spin 2s linear infinite' }} />
                 )}
               </div>
 
-              <h2 style={{
-                fontSize: '1.75rem',
-                fontWeight: '800',
-                color: '#1a1a2e',
-                marginBottom: '1rem'
-              }}>
-                {currentOperation === 'uploading' ? 'Uploading Document' : 'Translating Document'}
+              <h2 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1a1a2e', marginBottom: '0.5rem' }}>
+                {currentOperation === 'uploading' ? 'Uploading...' : 'Translating...'}
               </h2>
 
-              <p style={{
-                fontSize: '1rem',
-                color: '#666',
-                marginBottom: '2rem'
-              }}>
+              <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: '1.25rem' }}>
                 {currentOperation === 'uploading' 
-                  ? 'Please wait while we upload your document...' 
-                  : 'Your document is being translated. This may take a moment...'}
+                  ? 'Uploading your document' 
+                  : 'This may take a moment'}
               </p>
 
-              <div style={{ marginBottom: '1.5rem' }}>
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  marginBottom: '0.75rem'
-                }}>
-                  <span style={{
-                    fontSize: '0.875rem',
-                    fontWeight: '600',
-                    color: currentOperation === 'uploading' ? '#667eea' : '#f5576c'
-                  }}>
-                    {currentOperation === 'uploading' ? 'Upload Progress' : 'Translation Progress'}
+              <div style={{ marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: '600', color: currentOperation === 'uploading' ? '#667eea' : '#f5576c' }}>
+                    Progress
                   </span>
-                  <span style={{
-                    fontSize: '0.875rem',
-                    fontWeight: '700',
-                    color: currentOperation === 'uploading' ? '#667eea' : '#f5576c'
-                  }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: '700', color: currentOperation === 'uploading' ? '#667eea' : '#f5576c' }}>
                     {currentOperation === 'uploading' ? uploadProgress : translationProgress}%
                   </span>
                 </div>
                 <div style={{
                   width: '100%',
-                  height: '12px',
+                  height: '8px',
                   backgroundColor: '#e0e0e0',
-                  borderRadius: '6px',
+                  borderRadius: '4px',
                   overflow: 'hidden'
                 }}>
                   <div style={{
@@ -1974,18 +1782,13 @@ function App() {
                       ? 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)' 
                       : 'linear-gradient(90deg, #f093fb 0%, #f5576c 100%)',
                     transition: 'width 0.3s ease',
-                    borderRadius: '6px'
+                    borderRadius: '4px'
                   }}></div>
                 </div>
               </div>
 
-              <p style={{
-                fontSize: '0.875rem',
-                color: '#999',
-                marginTop: '1.5rem',
-                fontStyle: 'italic'
-              }}>
-                You can close this modal. The process will continue in the background.
+              <p style={{ fontSize: '0.75rem', color: '#999', fontStyle: 'italic' }}>
+                You can close this - processing continues in background
               </p>
             </div>
           </div>
@@ -2697,59 +2500,11 @@ function App() {
         @keyframes modalSlideIn {
           from {
             opacity: 0;
-            transform: scale(0.9) translateY(-20px);
+            transform: scale(0.95) translateY(-10px);
           }
           to {
             opacity: 1;
             transform: scale(1) translateY(0);
-          }
-        }
-        @keyframes celebrationSlideIn {
-          from {
-            opacity: 0;
-            transform: scale(0.8) translateY(-30px);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1) translateY(0);
-          }
-        }
-        @keyframes scaleIn {
-          from {
-            opacity: 0;
-            transform: scale(0);
-          }
-          to {
-            opacity: 1;
-            transform: scale(1);
-          }
-        }
-        @keyframes fadeInUp {
-          from {
-            opacity: 0;
-            transform: translateY(20px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        @keyframes bounce {
-          0%, 100% {
-            transform: translateX(-50%) translateY(0);
-          }
-          50% {
-            transform: translateX(-50%) translateY(-20px);
-          }
-        }
-        @keyframes pulse {
-          0%, 100% {
-            transform: scale(1);
-            box-shadow: 0 12px 40px rgba(255, 200, 0, 0.4);
-          }
-          50% {
-            transform: scale(1.05);
-            box-shadow: 0 16px 50px rgba(255, 200, 0, 0.6);
           }
         }
         * {
