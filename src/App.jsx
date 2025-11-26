@@ -13,10 +13,6 @@ const LANGUAGES = [
   { code: 'tn', name: 'Setswana', flag: '🇿🇦' },
   { code: 'ss', name: 'siSwati', flag: '🇿🇦' },
   { code: 'nso', name: 'Sepedi', flag: '🇿🇦' },
-  { code: 'es', name: 'Spanish', flag: '🇪🇸' },
-  { code: 'fr', name: 'French', flag: '🇫🇷' },
-  { code: 'de', name: 'German', flag: '🇩🇪' },
-  { code: 'pt', name: 'Portuguese', flag: '🇵🇹' },
 ]
 
 const SUBSCRIPTION_TIERS = {
@@ -916,7 +912,7 @@ function App() {
           )}
           
           {/* Debug info */}
-          {debugInfo && (
+          {/* {debugInfo && (
             <div style={{
               marginTop: '1rem',
               padding: '1rem',
@@ -930,7 +926,8 @@ function App() {
                 {JSON.stringify(debugInfo, null, 2)}
               </pre>
             </div>
-          )}
+          )} */}
+       
         </div>
 
         <style>{`
