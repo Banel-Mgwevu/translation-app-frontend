@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FileText, Upload, Download, Check, Clock, AlertCircle, Zap, Crown, Briefcase, X, LogIn, LogOut, UserPlus, Mail, Lock, User, BarChart3, TrendingUp, RefreshCw, Award, Target, Percent } from 'lucide-react'
+import { FileText, Upload, Download, Check, Clock, AlertCircle, Zap, Crown, Briefcase, X, LogIn, LogOut, UserPlus, Mail, Lock, User, BarChart3, TrendingUp, RefreshCw, Award, Target, Percent, ExternalLink } from 'lucide-react'
 
 const API_URL = 'https://translate-any-pdf.onrender.com'
 
@@ -31,7 +31,7 @@ const SUBSCRIPTION_TIERS = {
   professional: { 
     name: 'Professional', 
     limit: 20, 
-    price: 299, 
+    price: 20, 
     color: '#FFC800',
     icon: Crown,
     features: ['20 completed translations/month', 'All languages', 'DOCX support', 'Priority support', 'Fast processing', 'Email notifications']
@@ -108,9 +108,12 @@ function App() {
   const [debugInfo, setDebugInfo] = useState(null)
   const [showDebug, setShowDebug] = useState(false)
 
-  // Payment success state
+  // Payment state
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false)
   const [paymentSuccessData, setPaymentSuccessData] = useState(null)
+  const [showPaymentPendingModal, setShowPaymentPendingModal] = useState(false)
+  const [pendingPaymentTier, setPendingPaymentTier] = useState(null)
+  const [verifyingPayment, setVerifyingPayment] = useState(false)
 
   // Helper functions
   const getFileExtension = (filename) => {
@@ -201,27 +204,100 @@ function App() {
     }
   }
 
-  // Check for payment success on mount
-  useEffect(() => {
+  // Handle payment callback from URL params
+  const handlePaymentCallback = async () => {
     const urlParams = new URLSearchParams(window.location.search)
     const paymentStatus = urlParams.get('payment_status')
-    const tier = urlParams.get('tier')
+    const paymentCallback = urlParams.get('payment_callback')
+    const reference = urlParams.get('reference')
     
-    if (paymentStatus === 'success' && tier) {
-      setPaymentSuccessData({ tier })
-      setShowPaymentSuccessModal(true)
-      
-      // Clean up URL
+    console.log('🔍 Checking URL params:', { paymentStatus, paymentCallback, reference })
+    
+    // Clean up URL immediately
+    if (paymentStatus || paymentCallback || reference) {
       window.history.replaceState({}, document.title, window.location.pathname)
-      
-      // Refresh user info after a short delay
-      const token = localStorage.getItem('authToken')
-      if (token) {
-        setTimeout(() => {
-          fetchUserInfo(token)
-        }, 1000)
-      }
     }
+    
+    // If payment was successful, show pending modal for verification
+    if (paymentStatus === 'success') {
+      console.log('✓ Payment success detected from URL')
+      
+      // Get stored pending tier
+      const storedTier = localStorage.getItem('pendingPaymentTier')
+      
+      if (storedTier) {
+        setPendingPaymentTier(storedTier)
+        setShowPaymentPendingModal(true)
+      } else {
+        // Default to professional if no stored tier
+        setPendingPaymentTier('professional')
+        setShowPaymentPendingModal(true)
+      }
+    } else if (paymentStatus === 'cancelled') {
+      showMessage('Payment was cancelled', 'error')
+    }
+  }
+
+  // Verify payment and upgrade user
+  const verifyPaymentAndUpgrade = async () => {
+    if (!authToken) {
+      showMessage('Please sign in to verify payment', 'error')
+      setShowPaymentPendingModal(false)
+      return
+    }
+
+    setVerifyingPayment(true)
+
+    try {
+      console.log('🔄 Verifying payment...')
+      
+      const response = await apiCall('/payment/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+
+      console.log('✓ Payment verified:', response)
+
+      // Update local user state
+      if (response.user) {
+        setCurrentUser(prev => ({
+          ...prev,
+          tier: response.user.tier,
+          translations_used: response.user.translations_used,
+          translations_limit: response.user.translations_limit
+        }))
+        localStorage.setItem('user', JSON.stringify({
+          ...currentUser,
+          tier: response.user.tier,
+          translations_used: response.user.translations_used,
+          translations_limit: response.user.translations_limit
+        }))
+      }
+
+      // Clear pending payment tier
+      localStorage.removeItem('pendingPaymentTier')
+
+      // Show success modal
+      setShowPaymentPendingModal(false)
+      setPaymentSuccessData({ tier: response.tier })
+      setShowPaymentSuccessModal(true)
+
+      // Refresh user info
+      fetchUserInfo(authToken)
+
+    } catch (error) {
+      console.error('❌ Payment verification failed:', error)
+      showMessage(`Payment verification failed: ${error.message}. Please contact support.`, 'error')
+    } finally {
+      setVerifyingPayment(false)
+    }
+  }
+
+  // Check for payment callback on mount
+  useEffect(() => {
+    handlePaymentCallback()
   }, [])
 
   // Check authentication on mount
@@ -301,6 +377,11 @@ function App() {
       setAuthForm({ email: '', password: '', name: '' })
       showMessage(`Welcome ${data.user.name}!`, 'success')
       loadDocuments(data.token)
+
+      // Check if there's a pending payment to verify
+      setTimeout(() => {
+        handlePaymentCallback()
+      }, 500)
       
     } catch (error) {
       showMessage(error.message || 'Authentication failed', 'error')
@@ -326,6 +407,7 @@ function App() {
       setDocuments([])
       localStorage.removeItem('authToken')
       localStorage.removeItem('user')
+      localStorage.removeItem('pendingPaymentTier')
       showMessage('Signed out successfully', 'success')
     }
   }
@@ -598,6 +680,7 @@ function App() {
     }
   }
 
+  // Handle Paystack subscription
   const handleSubscribe = async (tier) => {
     if (tier === 'free') {
       showMessage('Cannot downgrade to free tier', 'error')
@@ -611,38 +694,33 @@ function App() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/payment/initiate`, {
+      console.log('💳 Initiating payment for tier:', tier)
+      
+      // Get payment info from API
+      const response = await apiCall('/payment/initiate', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${authToken}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({ tier })
       })
 
-      const data = await response.json()
+      console.log('✓ Payment initiated:', response)
 
-      if (response.ok) {
-        // Create and submit payment form
-        const form = document.createElement('form')
-        form.method = 'POST'
-        form.action = data.payment_url
-        
-        Object.entries(data.payment_data).forEach(([key, value]) => {
-          const input = document.createElement('input')
-          input.type = 'hidden'
-          input.name = key
-          input.value = value
-          form.appendChild(input)
-        })
+      // Store the pending tier in localStorage
+      localStorage.setItem('pendingPaymentTier', tier)
 
-        document.body.appendChild(form)
-        form.submit()
-      } else {
-        showMessage(`Payment initiation failed: ${data.detail}`, 'error')
-      }
+      // Open Paystack payment link in new window/tab
+      // When user returns, they'll click "I've completed payment" button
+      window.open(response.payment_url, '_blank')
+
+      // Show instructions modal
+      setPendingPaymentTier(tier)
+      setShowPaymentPendingModal(true)
+
     } catch (error) {
-      showMessage(`Error: ${error.message}`, 'error')
+      console.error('❌ Payment initiation failed:', error)
+      showMessage(`Payment initiation failed: ${error.message}`, 'error')
     }
   }
 
@@ -1289,6 +1367,190 @@ function App() {
                 }}
               >
                 Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Pending Modal - Show after redirecting to Paystack */}
+      {showPaymentPendingModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1003,
+          backdropFilter: 'blur(12px)'
+        }}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '32px',
+            padding: '3rem',
+            maxWidth: '550px',
+            width: '90%',
+            boxShadow: '0 32px 100px rgba(0, 0, 0, 0.5)',
+            position: 'relative',
+            animation: 'modalSlideIn 0.4s ease-out',
+            textAlign: 'center'
+          }}>
+            <button
+              onClick={() => {
+                setShowPaymentPendingModal(false)
+                setPendingPaymentTier(null)
+                localStorage.removeItem('pendingPaymentTier')
+              }}
+              style={{
+                position: 'absolute',
+                top: '1.5rem',
+                right: '1.5rem',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: '0.5rem',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <X size={24} color="#666" />
+            </button>
+
+            <div style={{
+              width: '100px',
+              height: '100px',
+              margin: '0 auto 2rem',
+              background: 'linear-gradient(135deg, #FFC800 0%, #f59e0b 100%)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 16px 50px rgba(255, 200, 0, 0.4)',
+              animation: 'pulse 2s ease-in-out infinite'
+            }}>
+              <Crown size={50} color="#000" />
+            </div>
+
+            <h2 style={{
+              fontSize: '1.75rem',
+              fontWeight: '900',
+              color: '#1a1a2e',
+              marginBottom: '1rem',
+              lineHeight: '1.2'
+            }}>
+              Complete Your Payment
+            </h2>
+
+            <p style={{
+              fontSize: '1.1rem',
+              color: '#666',
+              marginBottom: '1.5rem',
+              lineHeight: '1.6'
+            }}>
+              A new window has opened for you to complete your payment for the <strong>{SUBSCRIPTION_TIERS[pendingPaymentTier]?.name}</strong> plan (R{SUBSCRIPTION_TIERS[pendingPaymentTier]?.price}/month).
+            </p>
+
+            <div style={{
+              background: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+              borderRadius: '16px',
+              padding: '1.5rem',
+              marginBottom: '2rem',
+              border: '2px solid #bae6fd',
+              textAlign: 'left'
+            }}>
+              <h4 style={{ fontSize: '1rem', fontWeight: '700', color: '#0c4a6e', marginBottom: '1rem' }}>
+                📋 Instructions:
+              </h4>
+              <ol style={{ margin: 0, paddingLeft: '1.25rem', color: '#0369a1', lineHeight: '1.8' }}>
+                <li>Complete the payment in the Paystack window</li>
+                <li>Use the <strong>same email</strong> you registered with: <strong>{currentUser?.email}</strong></li>
+                <li>Once payment is complete, click the button below</li>
+              </ol>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <button
+                onClick={verifyPaymentAndUpgrade}
+                disabled={verifyingPayment}
+                style={{
+                  width: '100%',
+                  padding: '1.25rem',
+                  background: verifyingPayment ? '#e0e0e0' : 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '16px',
+                  fontSize: '1.1rem',
+                  fontWeight: '700',
+                  cursor: verifyingPayment ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.3s',
+                  boxShadow: verifyingPayment ? 'none' : '0 12px 32px rgba(34, 197, 94, 0.4)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.75rem'
+                }}
+              >
+                {verifyingPayment ? (
+                  <>
+                    <div style={{ width: '24px', height: '24px', border: '3px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                    Verifying Payment...
+                  </>
+                ) : (
+                  <>
+                    <Check size={24} />
+                    I've Completed Payment - Activate My Plan
+                  </>
+                )}
+              </button>
+
+              <button
+                onClick={() => window.open('https://paystack.shop/pay/8zcv4xhc7r', '_blank')}
+                style={{
+                  width: '100%',
+                  padding: '1rem',
+                  background: 'transparent',
+                  color: '#667eea',
+                  border: '2px solid #667eea',
+                  borderRadius: '12px',
+                  fontSize: '1rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.5rem'
+                }}
+              >
+                <ExternalLink size={18} />
+                Re-open Payment Page
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowPaymentPendingModal(false)
+                  setPendingPaymentTier(null)
+                  localStorage.removeItem('pendingPaymentTier')
+                }}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  background: 'transparent',
+                  color: '#999',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '0.9rem',
+                  fontWeight: '500',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
               </button>
             </div>
           </div>
