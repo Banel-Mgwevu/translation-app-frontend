@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { FileText, Upload, Download, Check, Clock, AlertCircle, Zap, Crown, Briefcase, X, LogIn, LogOut, UserPlus, Mail, Lock, User, BarChart3, TrendingUp, RefreshCw, Award, Target, Percent, ExternalLink } from 'lucide-react'
 
 const API_URL = 'https://translate-any-pdf.onrender.com'
@@ -100,12 +100,17 @@ function App() {
   const [loading, setLoading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [translationProgress, setTranslationProgress] = useState(0)
+  const [translationMessage, setTranslationMessage] = useState('')
   const [showSubscription, setShowSubscription] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [currentOperation, setCurrentOperation] = useState('')
   const [processingDocId, setProcessingDocId] = useState(null)
   const [showLimitModal, setShowLimitModal] = useState(false)
+  
+  // Background task polling
+  const [currentTaskId, setCurrentTaskId] = useState(null)
+  const pollingIntervalRef = useRef(null)
   
   // Metrics modal state
   const [showMetricsModal, setShowMetricsModal] = useState(false)
@@ -171,6 +176,15 @@ function App() {
     return Object.keys(errors).length === 0
   }
 
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+      }
+    }
+  }, [])
+
   // Enhanced API call function with better error handling
   const apiCall = async (endpoint, options = {}) => {
     const url = `${API_URL}${endpoint}`
@@ -235,6 +249,95 @@ function App() {
       
       throw error
     }
+  }
+
+  // Poll task status for background translations
+  const pollTaskStatus = async (taskId) => {
+    try {
+      const data = await apiCall(`/task/${taskId}/status`)
+      
+      console.log(`📊 Task ${taskId} status:`, data)
+      
+      // Update progress
+      setTranslationProgress(data.progress || 0)
+      setTranslationMessage(data.message || 'Processing...')
+      
+      // Check if completed
+      if (data.completed) {
+        // Stop polling
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+        
+        if (data.status === 'completed') {
+          setTranslationProgress(100)
+          setTranslationMessage('Translation completed!')
+          showMessage('Translation completed successfully!', 'success')
+          
+          // Refresh data
+          fetchUserInfo(authToken)
+          loadDocuments(authToken)
+          
+          // Close modal after short delay
+          setTimeout(() => {
+            setShowModal(false)
+            setLoading(false)
+            setCurrentOperation('')
+            setProcessingDocId(null)
+            setCurrentTaskId(null)
+            setTranslationProgress(0)
+            setTranslationMessage('')
+          }, 1500)
+          
+        } else if (data.status === 'failed') {
+          showMessage(`Translation failed: ${data.error || 'Unknown error'}`, 'error')
+          setShowModal(false)
+          setLoading(false)
+          setCurrentOperation('')
+          setProcessingDocId(null)
+          setCurrentTaskId(null)
+          setTranslationProgress(0)
+          setTranslationMessage('')
+        }
+      }
+      
+      return data
+      
+    } catch (error) {
+      console.error('Error polling task status:', error)
+      // Don't stop polling on transient errors
+      return null
+    }
+  }
+
+  // Start polling for a task
+  const startTaskPolling = (taskId) => {
+    console.log(`🔄 Starting polling for task: ${taskId}`)
+    
+    // Clear any existing polling
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+    }
+    
+    setCurrentTaskId(taskId)
+    
+    // Poll immediately
+    pollTaskStatus(taskId)
+    
+    // Then poll every 2 seconds
+    pollingIntervalRef.current = setInterval(() => {
+      pollTaskStatus(taskId)
+    }, 2000)
+  }
+
+  // Stop polling
+  const stopTaskPolling = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current)
+      pollingIntervalRef.current = null
+    }
+    setCurrentTaskId(null)
   }
 
   // Handle payment callback from URL params
@@ -433,6 +536,9 @@ function App() {
 
   // Handle sign out
   const handleSignOut = async () => {
+    // Stop any polling
+    stopTaskPolling()
+    
     try {
       if (authToken) {
         await apiCall('/auth/signout', {
@@ -618,6 +724,7 @@ function App() {
       setTimeout(() => {
         setUploadProgress(0)
         setCurrentOperation('translating')
+        setTranslationMessage('Starting translation...')
         handleTranslate(data.doc_id)
       }, 500)
       
@@ -634,22 +741,13 @@ function App() {
   const handleTranslate = async (docId) => {
     setLoading(true)
     setTranslationProgress(0)
+    setTranslationMessage('Initializing translation...')
     setShowModal(true)
     setCurrentOperation('translating')
     setProcessingDocId(docId)
 
     try {
       console.log('🌐 Starting translation:', docId)
-      
-      const progressInterval = setInterval(() => {
-        setTranslationProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval)
-            return 90
-          }
-          return prev + 15
-        })
-      }, 300)
 
       const data = await apiCall('/translate', {
         method: 'POST',
@@ -663,32 +761,49 @@ function App() {
         })
       })
 
-      clearInterval(progressInterval)
-      setTranslationProgress(100)
+      console.log('📦 Translation response:', data)
 
-      console.log('✓ Translation successful')
-      showMessage('Translation completed successfully!', 'success')
-      
-      // Refresh user info to update usage count
-      fetchUserInfo(authToken)
-      loadDocuments(authToken)
-      
-      setTimeout(() => {
-        setTranslationProgress(0)
-        setShowModal(false)
-        setLoading(false)
-        setCurrentOperation('')
-        setProcessingDocId(null)
-      }, 1000)
+      // Check if this is a background task (large file)
+      if (data.task_id) {
+        console.log('📋 Background task created:', data.task_id)
+        setTranslationMessage(data.message || 'Translation in progress...')
+        setTranslationProgress(5)
+        
+        // Start polling for task status
+        startTaskPolling(data.task_id)
+        
+      } else {
+        // Direct translation completed (small file)
+        setTranslationProgress(100)
+        setTranslationMessage('Translation completed!')
+        
+        console.log('✓ Direct translation successful')
+        showMessage('Translation completed successfully!', 'success')
+        
+        // Refresh user info to update usage count
+        fetchUserInfo(authToken)
+        loadDocuments(authToken)
+        
+        setTimeout(() => {
+          setTranslationProgress(0)
+          setTranslationMessage('')
+          setShowModal(false)
+          setLoading(false)
+          setCurrentOperation('')
+          setProcessingDocId(null)
+        }, 1000)
+      }
       
     } catch (error) {
       console.error('❌ Translation error:', error)
       showMessage(`Translation failed: ${error.message}`, 'error')
       setTranslationProgress(0)
+      setTranslationMessage('')
       setShowModal(false)
       setLoading(false)
       setCurrentOperation('')
       setProcessingDocId(null)
+      stopTaskPolling()
     }
   }
 
@@ -719,6 +834,28 @@ function App() {
     } catch (error) {
       showMessage(`Download error: ${error.message}`, 'error')
     }
+  }
+
+  // Handle cancel translation
+  const handleCancelTranslation = async () => {
+    if (currentTaskId) {
+      try {
+        await apiCall(`/task/${currentTaskId}/cancel`, {
+          method: 'POST'
+        })
+        showMessage('Translation cancelled', 'info')
+      } catch (error) {
+        console.error('Failed to cancel task:', error)
+      }
+    }
+    
+    stopTaskPolling()
+    setShowModal(false)
+    setLoading(false)
+    setCurrentOperation('')
+    setProcessingDocId(null)
+    setTranslationProgress(0)
+    setTranslationMessage('')
   }
 
   // Handle Paystack subscription
@@ -1095,6 +1232,20 @@ function App() {
                   tier: currentUser.tier,
                   usage: `${currentUser.translations_used}/${currentUser.translations_limit}`
                 } : null
+              }, null, 2)}
+            </pre>
+          </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <strong>Translation Status:</strong>
+            <pre style={{ margin: '0.5rem 0', background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', whiteSpace: 'pre-wrap' }}>
+              {JSON.stringify({
+                loading,
+                currentOperation,
+                currentTaskId,
+                translationProgress,
+                translationMessage,
+                processingDocId
               }, null, 2)}
             </pre>
           </div>
@@ -1687,7 +1838,7 @@ function App() {
         </div>
       )}
 
-      {/* Progress Modal - COMPACT */}
+      {/* Progress Modal - ENHANCED WITH REAL PROGRESS */}
       {showModal && (
         <div style={{
           position: 'fixed',
@@ -1706,73 +1857,80 @@ function App() {
             backgroundColor: '#ffffff',
             borderRadius: '16px',
             padding: '1.5rem',
-            maxWidth: '360px',
+            maxWidth: '400px',
             width: '100%',
             boxShadow: '0 16px 48px rgba(0, 0, 0, 0.25)',
             position: 'relative',
             animation: 'modalSlideIn 0.3s ease-out'
           }}>
-            <button
-              onClick={() => setShowModal(false)}
-              style={{
-                position: 'absolute',
-                top: '0.75rem',
-                right: '0.75rem',
-                background: '#f5f5f5',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '0.375rem',
-                borderRadius: '50%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              <X size={18} color="#666" />
-            </button>
+            {/* Only show close/cancel for translation, not upload */}
+            {currentOperation === 'translating' && (
+              <button
+                onClick={handleCancelTranslation}
+                style={{
+                  position: 'absolute',
+                  top: '0.75rem',
+                  right: '0.75rem',
+                  background: '#f5f5f5',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '0.375rem',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                title="Cancel translation"
+              >
+                <X size={18} color="#666" />
+              </button>
+            )}
 
             <div style={{ textAlign: 'center' }}>
               <div style={{
-                width: '56px',
-                height: '56px',
+                width: '64px',
+                height: '64px',
                 margin: '0 auto 1rem',
-                background: currentOperation === 'uploading' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+                background: currentOperation === 'uploading' 
+                  ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' 
+                  : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
                 borderRadius: '50%',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
                 {currentOperation === 'uploading' ? (
-                  <Upload size={28} color="#fff" />
+                  <Upload size={32} color="#fff" />
                 ) : (
-                  <RefreshCw size={28} color="#fff" style={{ animation: 'spin 2s linear infinite' }} />
+                  <RefreshCw size={32} color="#fff" style={{ animation: 'spin 2s linear infinite' }} />
                 )}
               </div>
 
-              <h2 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1a1a2e', marginBottom: '0.5rem' }}>
-                {currentOperation === 'uploading' ? 'Uploading...' : 'Translating...'}
+              <h2 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#1a1a2e', marginBottom: '0.5rem' }}>
+                {currentOperation === 'uploading' ? 'Uploading Document' : 'Translating Document'}
               </h2>
 
-              <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: '1.25rem' }}>
+              <p style={{ fontSize: '0.9rem', color: '#666', marginBottom: '1.5rem', minHeight: '1.5rem' }}>
                 {currentOperation === 'uploading' 
-                  ? 'Uploading your document' 
-                  : 'This may take a moment'}
+                  ? 'Uploading your document to the server...' 
+                  : translationMessage || 'Processing your document...'}
               </p>
 
-              <div style={{ marginBottom: '0.75rem' }}>
+              {/* Progress Bar */}
+              <div style={{ marginBottom: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: '600', color: currentOperation === 'uploading' ? '#667eea' : '#f5576c' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: '600', color: currentOperation === 'uploading' ? '#667eea' : '#f5576c' }}>
                     Progress
                   </span>
-                  <span style={{ fontSize: '0.8rem', fontWeight: '700', color: currentOperation === 'uploading' ? '#667eea' : '#f5576c' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: '700', color: currentOperation === 'uploading' ? '#667eea' : '#f5576c' }}>
                     {currentOperation === 'uploading' ? uploadProgress : translationProgress}%
                   </span>
                 </div>
                 <div style={{
                   width: '100%',
-                  height: '8px',
+                  height: '10px',
                   backgroundColor: '#e0e0e0',
-                  borderRadius: '4px',
+                  borderRadius: '5px',
                   overflow: 'hidden'
                 }}>
                   <div style={{
@@ -1782,13 +1940,31 @@ function App() {
                       ? 'linear-gradient(90deg, #667eea 0%, #764ba2 100%)' 
                       : 'linear-gradient(90deg, #f093fb 0%, #f5576c 100%)',
                     transition: 'width 0.3s ease',
-                    borderRadius: '4px'
+                    borderRadius: '5px'
                   }}></div>
                 </div>
               </div>
 
-              <p style={{ fontSize: '0.75rem', color: '#999', fontStyle: 'italic' }}>
-                You can close this - processing continues in background
+              {/* Task ID info for background tasks */}
+              {currentTaskId && (
+                <div style={{
+                  background: '#f0f9ff',
+                  border: '1px solid #bae6fd',
+                  borderRadius: '8px',
+                  padding: '0.75rem',
+                  marginBottom: '1rem'
+                }}>
+                  <div style={{ fontSize: '0.75rem', color: '#0369a1', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Clock size={14} />
+                    <span>Background processing - this may take a few minutes for large documents</span>
+                  </div>
+                </div>
+              )}
+
+              <p style={{ fontSize: '0.8rem', color: '#999', fontStyle: 'italic' }}>
+                {currentOperation === 'translating' && currentTaskId
+                  ? 'You can cancel anytime - progress is saved'
+                  : 'Please wait while we process your document'}
               </p>
             </div>
           </div>
@@ -2275,7 +2451,7 @@ function App() {
               </div>
               <div style={{ background: 'linear-gradient(135deg, #fbbf2420 0%, #f59e0b20 100%)', borderRadius: '12px', padding: '1.5rem' }}>
                 <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: '0.5rem' }}>Processing</div>
-                <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#f59e0b' }}>{documents.filter(d => d.status === 'translating' || d.status === 'uploaded').length}</div>
+                <div style={{ fontSize: '2.5rem', fontWeight: '800', color: '#f59e0b' }}>{documents.filter(d => d.status === 'translating' || d.status === 'uploaded' || d.status === 'queued').length}</div>
               </div>
               <div style={{ background: 'linear-gradient(135deg, #667eea20 0%, #764ba220 100%)', borderRadius: '12px', padding: '1.5rem' }}>
                 <div style={{ fontSize: '0.875rem', color: '#666', marginBottom: '0.5rem' }}>This Month</div>
