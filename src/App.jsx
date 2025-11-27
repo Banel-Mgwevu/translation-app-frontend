@@ -10,8 +10,6 @@ const LANGUAGES = [
   { code: 'zu', name: 'isiZulu', flag: '🇿🇦' },
   { code: 'xh', name: 'isiXhosa', flag: '🇿🇦' },
   { code: 'st', name: 'Sesotho', flag: '🇿🇦' },
-  { code: 'tn', name: 'Setswana', flag: '🇿🇦' },
-  { code: 'ss', name: 'siSwati', flag: '🇿🇦' },
   { code: 'nso', name: 'Sepedi', flag: '🇿🇦' },
 ]
 
