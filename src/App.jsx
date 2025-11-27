@@ -11,6 +11,7 @@ const LANGUAGES = [
   { code: 'xh', name: 'isiXhosa', flag: '🇿🇦' },
   { code: 'st', name: 'Sesotho', flag: '🇿🇦' },
   { code: 'nso', name: 'Sepedi', flag: '🇿🇦' },
+  { code: 'ts', name: 'Xitsonga', flag: '🇿🇦' },
 ]
 
 const SUBSCRIPTION_TIERS = {
