@@ -3,6 +3,12 @@ import { FileText, Upload, Download, Check, Clock, AlertCircle, Zap, Crown, Brie
 
 const API_URL = 'https://translate-any-pdf.onrender.com'
 
+// Payment URLs for different tiers
+const PAYMENT_URLS = {
+  professional: 'https://paystack.shop/pay/8zcv4xhc7r',
+  enterprise: 'https://paystack.shop/pay/e6i2wk1lnn'
+}
+
 const LANGUAGES = [
   { code: 'auto', name: 'Auto-detect', flag: '🌐' },
   { code: 'en', name: 'English', flag: '🇬🇧' },
@@ -29,7 +35,7 @@ const SUBSCRIPTION_TIERS = {
     price: 20, 
     color: '#FFC800',
     icon: Crown,
-    features: ['20 completed translations/month', 'All languages', 'DOCX support', 'Priority support', 'Fast processing', 'Email notifications']
+    features: ['20 completed translations/month', 'All languages', 'DOCX support', 'Priority support', 'Fast processing']
   },
   enterprise: { 
     name: 'Enterprise', 
@@ -37,7 +43,7 @@ const SUBSCRIPTION_TIERS = {
     price: 999, 
     color: '#E01E1E',
     icon: Briefcase,
-    features: ['Unlimited translations', 'All languages', 'DOCX support', '24/7 support', 'Instant processing', 'Dedicated manager', 'API access']
+    features: ['Unlimited translations', 'All languages', 'DOCX support', '24/7 support', 'Instant processing']
   }
 }
 
@@ -89,6 +95,7 @@ function App() {
   const [authForm, setAuthForm] = useState({ email: '', password: '', name: '' })
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [validationErrors, setValidationErrors] = useState({})
+  const [signupSuccess, setSignupSuccess] = useState(false)
   
   // App state
   const [selectedFile, setSelectedFile] = useState(null)
@@ -494,37 +501,65 @@ function App() {
     setLoading(true)
 
     try {
-      const endpoint = authMode === 'signin' ? '/auth/signin' : '/auth/signup'
-      const body = authMode === 'signin' 
-        ? { email: authForm.email, password: authForm.password }
-        : authForm
+      if (authMode === 'signup') {
+        // Handle signup - register user but don't auto-login
+        console.log(`🔑 Signing up: ${authForm.email}`)
 
-      console.log(`🔑 ${authMode === 'signin' ? 'Signing in' : 'Signing up'}: ${authForm.email}`)
+        const response = await fetch(`${API_URL}/auth/signup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(authForm)
+        })
 
-      const data = await apiCall(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.detail || 'Signup failed')
+        }
 
-      console.log('✓ Auth successful')
-      
-      setAuthToken(data.token)
-      setCurrentUser(data.user)
-      setIsAuthenticated(true)
-      localStorage.setItem('authToken', data.token)
-      localStorage.setItem('user', JSON.stringify(data.user))
-      setShowAuthModal(false)
-      setAuthForm({ email: '', password: '', name: '' })
-      setAcceptedTerms(false)
-      setValidationErrors({})
-      showMessage(`Welcome ${data.user.name}!`, 'success')
-      loadDocuments(data.token)
+        console.log('✓ Signup successful')
+        
+        // Show success message and redirect to signin
+        setSignupSuccess(true)
+        showMessage('Account created successfully! Please sign in.', 'success')
+        
+        // Clear form and switch to signin mode after a short delay
+        setTimeout(() => {
+          setAuthForm({ email: authForm.email, password: '', name: '' })
+          setAcceptedTerms(false)
+          setValidationErrors({})
+          setAuthMode('signin')
+          setSignupSuccess(false)
+        }, 2000)
 
-      // Check if there's a pending payment to verify
-      setTimeout(() => {
-        handlePaymentCallback()
-      }, 500)
+      } else {
+        // Handle signin
+        console.log(`🔑 Signing in: ${authForm.email}`)
+
+        const data = await apiCall('/auth/signin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: authForm.email, password: authForm.password })
+        })
+
+        console.log('✓ Signin successful')
+        
+        setAuthToken(data.token)
+        setCurrentUser(data.user)
+        setIsAuthenticated(true)
+        localStorage.setItem('authToken', data.token)
+        localStorage.setItem('user', JSON.stringify(data.user))
+        setShowAuthModal(false)
+        setAuthForm({ email: '', password: '', name: '' })
+        setAcceptedTerms(false)
+        setValidationErrors({})
+        showMessage(`Welcome back, ${data.user.name}!`, 'success')
+        loadDocuments(data.token)
+
+        // Check if there's a pending payment to verify
+        setTimeout(() => {
+          handlePaymentCallback()
+        }, 500)
+      }
       
     } catch (error) {
       showMessage(error.message || 'Authentication failed', 'error')
@@ -857,6 +892,11 @@ function App() {
     setTranslationMessage('')
   }
 
+  // Get payment URL for a tier
+  const getPaymentUrl = (tier) => {
+    return PAYMENT_URLS[tier] || PAYMENT_URLS.professional
+  }
+
   // Handle Paystack subscription
   const handleSubscribe = async (tier) => {
     if (tier === 'free') {
@@ -887,9 +927,12 @@ function App() {
       // Store the pending tier in localStorage
       localStorage.setItem('pendingPaymentTier', tier)
 
+      // Get the correct payment URL based on tier
+      const paymentUrl = getPaymentUrl(tier)
+      console.log(`💳 Using payment URL for ${tier}: ${paymentUrl}`)
+
       // Open Paystack payment link in new window/tab
-      // When user returns, they'll click "I've completed payment" button
-      window.open(response.payment_url, '_blank')
+      window.open(paymentUrl, '_blank')
 
       // Show instructions modal
       setPendingPaymentTier(tier)
@@ -942,9 +985,27 @@ function App() {
             </p>
           </div>
 
+          {/* Signup Success Message */}
+          {signupSuccess && (
+            <div style={{
+              marginBottom: '1.5rem',
+              padding: '1rem',
+              borderRadius: '12px',
+              backgroundColor: '#d4edda',
+              border: '1px solid #c3e6cb',
+              color: '#155724',
+              textAlign: 'center',
+              animation: 'slideIn 0.3s ease-out'
+            }}>
+              <Check size={24} style={{ marginBottom: '0.5rem' }} />
+              <div style={{ fontWeight: '600', marginBottom: '0.25rem' }}>Account Created Successfully!</div>
+              <div style={{ fontSize: '0.875rem' }}>Redirecting to sign in...</div>
+            </div>
+          )}
+
           {/* Auth Form */}
           <form onSubmit={handleAuth}>
-            {authMode === 'signup' && (
+            {authMode === 'signup' && !signupSuccess && (
               <div style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '600', color: '#555', marginBottom: '0.375rem' }}>
                   Full Name
@@ -979,155 +1040,159 @@ function App() {
               </div>
             )}
 
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '600', color: '#555', marginBottom: '0.375rem' }}>
-                Email Address
-              </label>
-              <div style={{ position: 'relative' }}>
-                <Mail size={18} color="#999" style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)' }} />
-                <input
-                  type="email"
-                  value={authForm.email}
-                  onChange={(e) => {
-                    setAuthForm({ ...authForm, email: e.target.value })
-                    if (validationErrors.email) {
-                      setValidationErrors({ ...validationErrors, email: '' })
-                    }
-                  }}
-                  required
-                  placeholder="your@email.com"
-                  style={{
-                    width: '100%',
-                    padding: '0.625rem 0.875rem 0.625rem 2.5rem',
-                    border: validationErrors.email ? '2px solid #ef4444' : '2px solid #e0e0e0',
-                    borderRadius: '10px',
-                    fontSize: '0.9rem',
-                    transition: 'border-color 0.2s'
-                  }}
-                  onFocus={(e) => e.target.style.borderColor = validationErrors.email ? '#ef4444' : '#667eea'}
-                  onBlur={(e) => e.target.style.borderColor = validationErrors.email ? '#ef4444' : '#e0e0e0'}
-                />
-              </div>
-              {validationErrors.email && (
-                <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem', marginBottom: 0 }}>{validationErrors.email}</p>
-              )}
-            </div>
+            {!signupSuccess && (
+              <>
+                <div style={{ marginBottom: '1rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '600', color: '#555', marginBottom: '0.375rem' }}>
+                    Email Address
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Mail size={18} color="#999" style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="email"
+                      value={authForm.email}
+                      onChange={(e) => {
+                        setAuthForm({ ...authForm, email: e.target.value })
+                        if (validationErrors.email) {
+                          setValidationErrors({ ...validationErrors, email: '' })
+                        }
+                      }}
+                      required
+                      placeholder="your@email.com"
+                      style={{
+                        width: '100%',
+                        padding: '0.625rem 0.875rem 0.625rem 2.5rem',
+                        border: validationErrors.email ? '2px solid #ef4444' : '2px solid #e0e0e0',
+                        borderRadius: '10px',
+                        fontSize: '0.9rem',
+                        transition: 'border-color 0.2s'
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = validationErrors.email ? '#ef4444' : '#667eea'}
+                      onBlur={(e) => e.target.style.borderColor = validationErrors.email ? '#ef4444' : '#e0e0e0'}
+                    />
+                  </div>
+                  {validationErrors.email && (
+                    <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem', marginBottom: 0 }}>{validationErrors.email}</p>
+                  )}
+                </div>
 
-            <div style={{ marginBottom: authMode === 'signup' ? '1rem' : '1.5rem' }}>
-              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '600', color: '#555', marginBottom: '0.375rem' }}>
-                Password
-              </label>
-              <div style={{ position: 'relative' }}>
-                <Lock size={18} color="#999" style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)' }} />
-                <input
-                  type="password"
-                  value={authForm.password}
-                  onChange={(e) => {
-                    setAuthForm({ ...authForm, password: e.target.value })
-                    if (validationErrors.password) {
-                      setValidationErrors({ ...validationErrors, password: '' })
-                    }
-                  }}
-                  required
-                  placeholder="••••••••"
-                  style={{
-                    width: '100%',
-                    padding: '0.625rem 0.875rem 0.625rem 2.5rem',
-                    border: validationErrors.password ? '2px solid #ef4444' : '2px solid #e0e0e0',
-                    borderRadius: '10px',
-                    fontSize: '0.9rem',
-                    transition: 'border-color 0.2s'
-                  }}
-                  onFocus={(e) => e.target.style.borderColor = validationErrors.password ? '#ef4444' : '#667eea'}
-                  onBlur={(e) => e.target.style.borderColor = validationErrors.password ? '#ef4444' : '#e0e0e0'}
-                />
-              </div>
-              {validationErrors.password && (
-                <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem', marginBottom: 0 }}>{validationErrors.password}</p>
-              )}
-              {authMode === 'signup' && !validationErrors.password && (
-                <p style={{ color: '#888', fontSize: '0.7rem', marginTop: '0.25rem', marginBottom: 0 }}>Minimum 5 characters</p>
-              )}
-            </div>
+                <div style={{ marginBottom: authMode === 'signup' ? '1rem' : '1.5rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: '600', color: '#555', marginBottom: '0.375rem' }}>
+                    Password
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <Lock size={18} color="#999" style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      type="password"
+                      value={authForm.password}
+                      onChange={(e) => {
+                        setAuthForm({ ...authForm, password: e.target.value })
+                        if (validationErrors.password) {
+                          setValidationErrors({ ...validationErrors, password: '' })
+                        }
+                      }}
+                      required
+                      placeholder="••••••••"
+                      style={{
+                        width: '100%',
+                        padding: '0.625rem 0.875rem 0.625rem 2.5rem',
+                        border: validationErrors.password ? '2px solid #ef4444' : '2px solid #e0e0e0',
+                        borderRadius: '10px',
+                        fontSize: '0.9rem',
+                        transition: 'border-color 0.2s'
+                      }}
+                      onFocus={(e) => e.target.style.borderColor = validationErrors.password ? '#ef4444' : '#667eea'}
+                      onBlur={(e) => e.target.style.borderColor = validationErrors.password ? '#ef4444' : '#e0e0e0'}
+                    />
+                  </div>
+                  {validationErrors.password && (
+                    <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem', marginBottom: 0 }}>{validationErrors.password}</p>
+                  )}
+                  {authMode === 'signup' && !validationErrors.password && (
+                    <p style={{ color: '#888', fontSize: '0.7rem', marginTop: '0.25rem', marginBottom: 0 }}>Minimum 5 characters</p>
+                  )}
+                </div>
 
-            {/* Terms and Conditions Checkbox - Only for signup */}
-            {authMode === 'signup' && (
-              <div style={{ marginBottom: '1.5rem' }}>
-                <label style={{ 
-                  display: 'flex', 
-                  alignItems: 'flex-start', 
-                  gap: '0.625rem',
-                  cursor: 'pointer',
-                  fontSize: '0.8rem',
-                  color: '#555'
-                }}>
-                  <input
-                    type="checkbox"
-                    checked={acceptedTerms}
-                    onChange={(e) => {
-                      setAcceptedTerms(e.target.checked)
-                      if (validationErrors.terms) {
-                        setValidationErrors({ ...validationErrors, terms: '' })
-                      }
-                    }}
-                    style={{
-                      width: '16px',
-                      height: '16px',
-                      marginTop: '2px',
-                      accentColor: '#667eea',
-                      cursor: 'pointer'
-                    }}
-                  />
-                  <span>
-                    I agree to the{' '}
-                    <a href="#" style={{ color: '#667eea', textDecoration: 'underline' }} onClick={(e) => e.preventDefault()}>
-                      Terms of Service
-                    </a>{' '}
-                    and{' '}
-                    <a href="#" style={{ color: '#667eea', textDecoration: 'underline' }} onClick={(e) => e.preventDefault()}>
-                      Privacy Policy
-                    </a>
-                  </span>
-                </label>
-                {validationErrors.terms && (
-                  <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.375rem', marginBottom: 0, marginLeft: '1.625rem' }}>{validationErrors.terms}</p>
+                {/* Terms and Conditions Checkbox - Only for signup */}
+                {authMode === 'signup' && (
+                  <div style={{ marginBottom: '1.5rem' }}>
+                    <label style={{ 
+                      display: 'flex', 
+                      alignItems: 'flex-start', 
+                      gap: '0.625rem',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      color: '#555'
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={acceptedTerms}
+                        onChange={(e) => {
+                          setAcceptedTerms(e.target.checked)
+                          if (validationErrors.terms) {
+                            setValidationErrors({ ...validationErrors, terms: '' })
+                          }
+                        }}
+                        style={{
+                          width: '16px',
+                          height: '16px',
+                          marginTop: '2px',
+                          accentColor: '#667eea',
+                          cursor: 'pointer'
+                        }}
+                      />
+                      <span>
+                        I agree to the{' '}
+                        <a href="#" style={{ color: '#667eea', textDecoration: 'underline' }} onClick={(e) => e.preventDefault()}>
+                          Terms of Service
+                        </a>{' '}
+                        and{' '}
+                        <a href="#" style={{ color: '#667eea', textDecoration: 'underline' }} onClick={(e) => e.preventDefault()}>
+                          Privacy Policy
+                        </a>
+                      </span>
+                    </label>
+                    {validationErrors.terms && (
+                      <p style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.375rem', marginBottom: 0, marginLeft: '1.625rem' }}>{validationErrors.terms}</p>
+                    )}
+                  </div>
                 )}
-              </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={loading}
-              style={{
-                width: '100%',
-                padding: '0.875rem',
-                background: loading ? '#e0e0e0' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: '#ffffff',
-                border: 'none',
-                borderRadius: '10px',
-                fontSize: '0.95rem',
-                fontWeight: '700',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                transition: 'all 0.2s',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.5rem',
-                marginBottom: '0.875rem'
-              }}
-            >
-              {loading ? (
-                <>
-                  <div style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-                  Processing...
-                </>
-              ) : (
-                <>
-                  {authMode === 'signin' ? <LogIn size={18} /> : <UserPlus size={18} />}
-                  {authMode === 'signin' ? 'Sign In' : 'Sign Up'}
-                </>
-              )}
-            </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    width: '100%',
+                    padding: '0.875rem',
+                    background: loading ? '#e0e0e0' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '10px',
+                    fontSize: '0.95rem',
+                    fontWeight: '700',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem',
+                    marginBottom: '0.875rem'
+                  }}
+                >
+                  {loading ? (
+                    <>
+                      <div style={{ width: '18px', height: '18px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      {authMode === 'signin' ? <LogIn size={18} /> : <UserPlus size={18} />}
+                      {authMode === 'signin' ? 'Sign In' : 'Create Account'}
+                    </>
+                  )}
+                </button>
+              </>
+            )}
 
             <div style={{ textAlign: 'center' }}>
               <button
@@ -1136,6 +1201,8 @@ function App() {
                   setAuthMode(authMode === 'signin' ? 'signup' : 'signin')
                   setValidationErrors({})
                   setAcceptedTerms(false)
+                  setSignupSuccess(false)
+                  setAuthForm({ email: '', password: '', name: '' })
                 }}
                 style={{
                   background: 'transparent',
@@ -1152,7 +1219,7 @@ function App() {
             </div>
           </form>
 
-          {message && (
+          {message && !signupSuccess && (
             <div style={{
               marginTop: '1.25rem',
               padding: '0.875rem',
@@ -1171,6 +1238,16 @@ function App() {
         <style>{`
           @keyframes spin {
             to { transform: rotate(360deg); }
+          }
+          @keyframes slideIn {
+            from {
+              opacity: 0;
+              transform: translateY(-10px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
           }
         `}</style>
       </div>
@@ -1248,6 +1325,13 @@ function App() {
               }, null, 2)}
             </pre>
           </div>
+
+          <div style={{ marginBottom: '1rem' }}>
+            <strong>Payment URLs:</strong>
+            <pre style={{ margin: '0.5rem 0', background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', whiteSpace: 'pre-wrap' }}>
+              {JSON.stringify(PAYMENT_URLS, null, 2)}
+            </pre>
+          </div>
           
           {debugInfo && (
             <div style={{ marginBottom: '1rem' }}>
@@ -1264,6 +1348,7 @@ function App() {
               console.log('Auth:', { isAuthenticated, authToken: authToken?.substring(0, 20), currentUser })
               console.log('Documents:', documents)
               console.log('Debug Info:', debugInfo)
+              console.log('Payment URLs:', PAYMENT_URLS)
               alert('Full state logged to console (F12)')
             }}
             style={{
@@ -1500,13 +1585,19 @@ function App() {
                 width: '56px',
                 height: '56px',
                 margin: '0 auto 1rem',
-                background: 'linear-gradient(135deg, #FFC800 0%, #f59e0b 100%)',
+                background: pendingPaymentTier === 'enterprise' 
+                  ? 'linear-gradient(135deg, #E01E1E 0%, #b91c1c 100%)'
+                  : 'linear-gradient(135deg, #FFC800 0%, #f59e0b 100%)',
                 borderRadius: '50%',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center'
               }}>
-                <Crown size={28} color="#000" />
+                {pendingPaymentTier === 'enterprise' ? (
+                  <Briefcase size={28} color="#fff" />
+                ) : (
+                  <Crown size={28} color="#000" />
+                )}
               </div>
 
               <h2 style={{ fontSize: '1.125rem', fontWeight: '700', color: '#1a1a2e', marginBottom: '0.5rem' }}>
@@ -1567,7 +1658,7 @@ function App() {
                 </button>
 
                 <button
-                  onClick={() => window.open('https://paystack.shop/pay/8zcv4xhc7r', '_blank')}
+                  onClick={() => window.open(getPaymentUrl(pendingPaymentTier), '_blank')}
                   style={{
                     width: '100%',
                     padding: '0.75rem',
