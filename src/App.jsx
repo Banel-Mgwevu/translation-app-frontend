@@ -125,7 +125,7 @@ function App() {
   
   // Debug mode
   const [debugInfo, setDebugInfo] = useState(null)
-  const [showDebug, setShowDebug] = useState(false)
+  // const [showDebug, setShowDebug] = useState(false)
 
   // Payment state
   const [showPaymentSuccessModal, setShowPaymentSuccessModal] = useState(false)
@@ -1257,115 +1257,6 @@ function App() {
   return (
     <div style={{ fontFamily: "'Inter', 'Helvetica Neue', Arial, sans-serif", minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f8f9fa' }}>
       {/* Debug Toggle Button */}
-      <button
-        onClick={() => setShowDebug(!showDebug)}
-        style={{
-          position: 'fixed',
-          bottom: '20px',
-          right: '20px',
-          padding: '12px',
-          background: '#667eea',
-          color: '#fff',
-          border: 'none',
-          borderRadius: '50%',
-          cursor: 'pointer',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
-          zIndex: 1000,
-          fontSize: '20px'
-        }}
-        title="Toggle Debug Info"
-      >
-        🐛
-      </button>
-
-      {/* Debug Panel */}
-      {showDebug && (
-        <div style={{
-          position: 'fixed',
-          bottom: '80px',
-          right: '20px',
-          width: '400px',
-          maxHeight: '500px',
-          overflowY: 'auto',
-          background: '#fff',
-          border: '2px solid #667eea',
-          borderRadius: '12px',
-          padding: '1rem',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
-          zIndex: 1000,
-          fontSize: '0.75rem'
-        }}>
-          <h3 style={{ margin: '0 0 1rem 0', color: '#667eea' }}>🐛 Debug Info</h3>
-          
-          <div style={{ marginBottom: '1rem' }}>
-            <strong>Auth Status:</strong>
-            <pre style={{ margin: '0.5rem 0', background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', whiteSpace: 'pre-wrap' }}>
-              {JSON.stringify({
-                authenticated: isAuthenticated,
-                token: authToken ? `${authToken.substring(0, 20)}...` : null,
-                user: currentUser ? {
-                  email: currentUser.email,
-                  tier: currentUser.tier,
-                  usage: `${currentUser.translations_used}/${currentUser.translations_limit}`
-                } : null
-              }, null, 2)}
-            </pre>
-          </div>
-
-          <div style={{ marginBottom: '1rem' }}>
-            <strong>Translation Status:</strong>
-            <pre style={{ margin: '0.5rem 0', background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', whiteSpace: 'pre-wrap' }}>
-              {JSON.stringify({
-                loading,
-                currentOperation,
-                currentTaskId,
-                translationProgress,
-                translationMessage,
-                processingDocId
-              }, null, 2)}
-            </pre>
-          </div>
-
-          <div style={{ marginBottom: '1rem' }}>
-            <strong>Payment URLs:</strong>
-            <pre style={{ margin: '0.5rem 0', background: '#f5f5f5', padding: '0.5rem', borderRadius: '4px', whiteSpace: 'pre-wrap' }}>
-              {JSON.stringify(PAYMENT_URLS, null, 2)}
-            </pre>
-          </div>
-          
-          {debugInfo && (
-            <div style={{ marginBottom: '1rem' }}>
-              <strong>Last Error:</strong>
-              <pre style={{ margin: '0.5rem 0', background: '#fff3cd', padding: '0.5rem', borderRadius: '4px', color: '#856404', whiteSpace: 'pre-wrap' }}>
-                {JSON.stringify(debugInfo, null, 2)}
-              </pre>
-            </div>
-          )}
-          
-          <button
-            onClick={() => {
-              console.log('=== FULL STATE DUMP ===')
-              console.log('Auth:', { isAuthenticated, authToken: authToken?.substring(0, 20), currentUser })
-              console.log('Documents:', documents)
-              console.log('Debug Info:', debugInfo)
-              console.log('Payment URLs:', PAYMENT_URLS)
-              alert('Full state logged to console (F12)')
-            }}
-            style={{
-              width: '100%',
-              padding: '0.5rem',
-              background: '#667eea',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '0.75rem'
-            }}
-          >
-            Log Full State to Console
-          </button>
-        </div>
-      )}
 
       {/* Evaluation Metrics Modal - COMPACT */}
       {showMetricsModal && metricsData && selectedDocForMetrics && (
