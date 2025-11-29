@@ -27,7 +27,7 @@ const SUBSCRIPTION_TIERS = {
     price: 0, 
     color: '#0056A8',
     icon: Zap,
-    features: ['5 completed translations/month', 'All languages', 'DOCX support', 'Basic support', 'Standard processing']
+    features: ['5 completed translations/month', 'All languages', 'DOCX support', 'Standard processing']
   },
   professional: { 
     name: 'Professional', 
@@ -35,7 +35,7 @@ const SUBSCRIPTION_TIERS = {
     price: 20, 
     color: '#FFC800',
     icon: Crown,
-    features: ['20 completed translations/month', 'All languages', 'DOCX support', 'Priority support', 'Fast processing']
+    features: ['20 completed translations/month', 'All languages', 'DOCX support', 'Fast processing']
   },
   enterprise: { 
     name: 'Enterprise', 
@@ -2741,7 +2741,7 @@ function App() {
             Academic Document Translator
           </div>
           <div style={{ fontSize: '0.875rem', color: 'rgba(255,255,255,0.7)', marginBottom: '0.5rem' }}>
-            Supporting DOCX • 11+ Languages • Research & Academic Use
+            Supporting DOCX • 8 Languages • Research & Academic Use
           </div>
           <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>
             Preserving academic integrity through professional translation • 2025
