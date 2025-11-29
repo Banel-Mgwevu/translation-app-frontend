@@ -219,7 +219,7 @@ function App() {
         console.error('❌ Authentication failed - logging out')
         handleSignOut()
         showMessage('Session expired. Please sign in again.', 'error')
-        throw new Error('Authentication required')
+        throw new Error('Invalid email or password. Please try again.')
       }
       
       // Try to parse JSON
