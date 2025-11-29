@@ -40,7 +40,7 @@ const SUBSCRIPTION_TIERS = {
   enterprise: { 
     name: 'Enterprise', 
     limit: Infinity, 
-    price: 999, 
+    price: 50, 
     color: '#E01E1E',
     icon: Briefcase,
     features: ['Unlimited translations', 'All languages', 'DOCX support', '24/7 support', 'Instant processing']
